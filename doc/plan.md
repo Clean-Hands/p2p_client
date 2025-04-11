@@ -55,7 +55,7 @@ A decentralized peer-to-peer file sharing application that can send a file from 
 * Networking can be opaque  
   * Writing our own network code sounds daunting right now  
 * Breaking up work effectively to allow us to work independently  
-  * Networking seems very interrelated—it seems natural that the same person could write client and server.
+  * Networking seems very interrelated — e.g. it seems natural that the same person could write client and server.
 
 ## Communication Plan and Meeting Schedule
 * Group chat  
