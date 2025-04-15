@@ -21,6 +21,7 @@ A decentralized peer-to-peer file sharing application that can send a file from 
   * Encryption (using a pre-existing Rust library)  
 * Stretch goals  
   * A GUI
+  * Download single file from multiple sources simultaneously / Send file from multiple sources simultaneously
 
 ## Description of Architecture
 * Cargo for project and library management  
