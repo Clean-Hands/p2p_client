@@ -37,9 +37,7 @@ pub fn run_client_server(send_addrs: &[String], port: &String, username: &String
     };
 
     println!("Successfully started listener.");
-
     for stream in listener.incoming() {
-        // check to see if listener.incoming returned an error
         let mut stream = match stream {
             Ok(s) => s,
             Err(e) => {
@@ -47,32 +45,28 @@ pub fn run_client_server(send_addrs: &[String], port: &String, username: &String
                 continue;
             }
         };
-
-        // create an array of 512 bytes of 0s
-        let mut buffer: [u8; 512] = [0; 512];
-
-        loop {
-            // get the number of bytes read
-            // read() needs a fixed size input to write into
-            let num_bytes_read = match stream.read(&mut buffer) {
-                Ok(0) => { // if 0 bytes read
-                    println!("Partner disconnected");
-                    break;
-                }
-                Ok(n) => n,
-                Err(e) => {
-                    eprintln!("Failed to read from stream: {e}");
-                    break;
-                }
-            };
-
-            // convert received bytes to String to print
-            // only read in the first num_bytes_read number of bytes
-            // e.g. if message is 10 bytes long, only convert those 10 bytes, not full 512
-            let received = String::from_utf8_lossy(&buffer[..num_bytes_read]);
-
-            println!("{}", received.trim());
-        }
+    
+        // create new thread for each incoming stream to handle more than a 2 agent connection
+        thread::spawn(move || {
+            let mut buffer: [u8; 512] = [0; 512];
+    
+            loop {
+                let num_bytes_read = match stream.read(&mut buffer) {
+                    Ok(0) => {
+                        println!("Partner disconnected");
+                        break;
+                    }
+                    Ok(n) => n,
+                    Err(e) => {
+                        eprintln!("Failed to read from stream: {e}");
+                        break;
+                    }
+                };
+    
+                let received = String::from_utf8_lossy(&buffer[..num_bytes_read]);
+                println!("{}", received.trim());
+            }
+        });
     }
 }
 
