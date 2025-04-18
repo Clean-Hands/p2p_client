@@ -1,17 +1,14 @@
 // main.rs
 // by Ruben Boero, Lazuli Kleinhans
-// April 17th, 2025
+// April 18th, 2025
 // CS347 Advanced Software Design
 
-use std::net::TcpStream;
-use std::net::TcpListener;
-use std::io::Read;
-use std::io::{self, Write};
-use std::thread;
+use std::net::{TcpStream, TcpListener};
+use std::io::{self, Write, Read};
+use std::thread::{self, sleep};
+use std::time::Duration;
 use std::env::args;
 use std::process;
-use std::thread::sleep;
-use std::time::Duration;
 
 pub fn run_client_server(send_addrs: &[String], port: &String, username: &String) {
 
@@ -106,11 +103,8 @@ fn spawn_sender_thread(send_ip: String, port: String, username: String) {
             if message.trim() == String::from("/exit"){
                 println!("Goodbye!");
                 // tell other users you disconnected
-                match stream.write_all(format!("[{username} disconnected]").as_bytes()) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        eprintln!("Failed to send disconnect message: {e}");
-                    }
+                if let Err(e) = stream.write_all(format!("[{username} disconnected]").as_bytes()) {
+                    eprintln!("Failed to send disconnect message: {e}");
                 }
                 process::exit(0);
             }
@@ -118,12 +112,9 @@ fn spawn_sender_thread(send_ip: String, port: String, username: String) {
             // send your message along with your username so others know who sent it
             message = format!("[{username}] {message}");
 
-            match stream.write_all(message.as_bytes()) {
-                Ok(_) => (),
-                Err(e) => {
-                    eprintln!("Failed to write to stream: {e}");
-                    return;
-                }
+            if let Err(e) = stream.write_all(message.as_bytes()) {
+                eprintln!("Failed to write to stream: {e}");
+                return;
             }
         }
     });
