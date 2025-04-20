@@ -1,6 +1,6 @@
 // main.rs
 // by Ruben Boero, Lazuli Kleinhans
-// April 18th, 2025
+// April 20th, 2025
 // CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
@@ -10,12 +10,57 @@ use std::time::Duration;
 use std::env::args;
 use std::process;
 
-pub fn run_client_server(send_addrs: &[String], port: &String, username: &String) {
-
-    // start a sender thread for every IP the user wants to talk to
-    for addr in send_addrs {
-        spawn_sender_thread(addr.clone(), port.clone(), username.clone());
+fn send_to_all_connections(streams: &Vec<TcpStream>, message: String) {
+    for mut stream in streams {
+        if let Err(e) = stream.write_all(message.as_bytes()) {
+            eprintln!("Failed to write to stream: {e}");
+            return;
+        }
     }
+}
+
+fn run_client_server(send_addrs: &[String], port: &String, username: &String) {
+
+    let username_clone  = username.clone();
+    let port_clone  = port.clone();
+    let mut send_addrs_clone: Vec<String> = vec![];
+    for addr in send_addrs {
+        send_addrs_clone.push(addr.clone());
+    }
+    
+    thread::spawn(move || {
+        
+        // start a sender stream for every IP the user wants to talk to
+        let mut senders: Vec<TcpStream> = vec![];
+        for addr in send_addrs_clone {
+            senders.push(connect_sender_stream(addr.clone(), &port_clone, &username_clone));
+        }
+
+        loop {
+            let mut message = String::new();
+
+            // if let tries to match the output of read_line to Err, if it does match, it prints error message,
+            // but if there is no error (Ok returned from read_line), then nothing happens
+            if let Err(e) = io::stdin().read_line(&mut message) {
+                eprintln!("Failed to read line: {e}");
+                return;
+            }
+
+            if message.trim() == String::from("/exit"){
+                println!("Goodbye!");
+                // tell other users you disconnected
+                send_to_all_connections(&senders, format!("[{username_clone} disconnected]"));
+                process::exit(0);
+            }
+
+            // send your message along with your username so others know who sent it
+            message = format!("[{username_clone}] {message}");
+
+            send_to_all_connections(&senders, message);
+        }
+    });
+    println!("Successfully started sender thread.");
+
 
     // handle incoming data and print it to the terminal
     println!("Starting listener...");
@@ -67,57 +112,23 @@ pub fn run_client_server(send_addrs: &[String], port: &String, username: &String
     }
 }
 
-fn spawn_sender_thread(send_ip: String, port: String, username: String) {
-    thread::spawn(move || {
-        let mut stream: TcpStream;
-        let send_addr: String = send_ip + ":" + &port;
-        
-        // loop until connection is successful
-        loop {
-            println!("Attempting to connect to {send_addr}...");
-            match TcpStream::connect(&send_addr) {
-                Ok(s) => {
-                    println!("Connected to {send_addr} as {username}");
-                    stream = s;
-                    break;
-                },
-                Err(e) => {
-                    eprintln!("Failed to connect to {send_addr}: {e}");
-                    sleep(Duration::from_secs(1));
-                }
-            };
-        }
-
-        println!("Successfully started sender thread.");
-        
-        loop {
-            let mut message = String::new();
-
-            // if let tries to match the output of read_line to Err, if it does match, it prints error message,
-            // but if there is no error (Ok returned from read_line), then nothing happens
-            if let Err(e) = io::stdin().read_line(&mut message) {
-                eprintln!("Failed to read line: {e}");
-                return;
+fn connect_sender_stream(send_ip: String, port: &String, username: &String) -> TcpStream {
+    let send_addr: String = send_ip + ":" + &port;
+    
+    // loop until connection is successful
+    loop {
+        println!("Attempting to connect to {send_addr}...");
+        match TcpStream::connect(&send_addr) {
+            Ok(s) => {
+                println!("Connected to {send_addr} as {username}");
+                return s;
+            },
+            Err(e) => {
+                eprintln!("Failed to connect to {send_addr}: {e}");
+                sleep(Duration::from_secs(1));
             }
-
-            if message.trim() == String::from("/exit"){
-                println!("Goodbye!");
-                // tell other users you disconnected
-                if let Err(e) = stream.write_all(format!("[{username} disconnected]").as_bytes()) {
-                    eprintln!("Failed to send disconnect message: {e}");
-                }
-                process::exit(0);
-            }
-
-            // send your message along with your username so others know who sent it
-            message = format!("[{username}] {message}");
-
-            if let Err(e) = stream.write_all(message.as_bytes()) {
-                eprintln!("Failed to write to stream: {e}");
-                return;
-            }
-        }
-    });
+        };
+    }
 }
 
 fn main() {
