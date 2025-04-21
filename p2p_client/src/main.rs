@@ -1,7 +1,7 @@
-// main.rs
-// by Ruben Boero, Lazuli Kleinhans
-// April 21st, 2025
-// CS347 Advanced Software Design
+//! main.rs
+//! by Ruben Boero, Lazuli Kleinhans
+//! April 21st, 2025
+//! CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
 use std::io::{self, Write, Read};
@@ -10,16 +10,26 @@ use std::time::Duration;
 use std::env::args;
 use std::process;
 
+/// Connects a `TcpStream` object to the address `[send_ip]:[port]` and returns said object.
+/// 
+/// # Example
+/// 
+/// ```rust
+/// let addr = String::from("127.0.0.1");
+/// let port = String::from("7878");
+/// let stream: TcpStream = connect_sender_stream(&addr, &port);
+/// stream.write_all("Hello, world!".as_bytes());
+/// ```
+fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 
-fn connect_sender_stream(send_ip: String, port: &String, username: &String) -> TcpStream {
-    let send_addr: String = send_ip + ":" + &port;
+    let send_addr: String = send_ip.to_owned() + ":" + port;
     
     // loop until connection is successful
     loop {
         println!("Attempting to connect to {send_addr}...");
         match TcpStream::connect(&send_addr) {
             Ok(s) => {
-                println!("Connected to {send_addr} as {username}");
+                println!("Connected to {send_addr}");
                 return s;
             },
             Err(e) => {
@@ -33,6 +43,7 @@ fn connect_sender_stream(send_ip: String, port: &String, username: &String) -> T
 
 fn send_to_all_connections(streams: &Vec<TcpStream>, message: String) {
     for mut stream in streams {
+        let message = "hello";
         if let Err(e) = stream.write_all(message.as_bytes()) {
             eprintln!("Failed to write to stream: {e}");
             return;
@@ -46,7 +57,7 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
         // start a sender stream for every IP the user wants to talk to
         let mut senders: Vec<TcpStream> = vec![];
         for addr in send_addrs {
-            senders.push(connect_sender_stream(addr.clone(), &port, &username));
+            senders.push(connect_sender_stream(&addr, &port));
         }
 
         loop {
