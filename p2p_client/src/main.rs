@@ -81,7 +81,7 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
     let listen_addr = String::from("0.0.0.0:") + &port;
     let listener = match TcpListener::bind(&listen_addr) {
         Ok(l) => {
-            println!("Server listening on {}", &listen_addr);
+            println!("Client listening on {}", &listen_addr);
             l
         }
         Err(e) => {
