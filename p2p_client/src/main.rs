@@ -1,6 +1,6 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans
-//! April 21st, 2025
+//! April 22nd, 2025
 //! CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
@@ -9,6 +9,7 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::env::args;
 use std::process;
+
 
 /// Connects a `TcpStream` object to the address `[send_ip]:[port]` and returns said object.
 /// 
@@ -23,7 +24,6 @@ use std::process;
 fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 
     let send_addr: String = send_ip.to_owned() + ":" + port;
-    
     // loop until connection is successful
     loop {
         println!("Attempting to connect to {send_addr}...");
@@ -41,9 +41,18 @@ fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 }
 
 
+/// Writes the String `message` to all `TcpStream` objects in the Vec `streams`.
+/// 
+/// # Example
+/// 
+/// ```rust
+/// let senders: Vec<TcpStream> = vec![stream1, stream2];
+/// let message = String::from("Hello, world!");
+/// let stream: TcpStream = send_to_all_connections(&senders, message);
+/// ```
 fn send_to_all_connections(streams: &Vec<TcpStream>, message: String) {
+
     for mut stream in streams {
-        let message = "hello";
         if let Err(e) = stream.write_all(message.as_bytes()) {
             eprintln!("Failed to write to stream: {e}");
             return;
@@ -51,9 +60,20 @@ fn send_to_all_connections(streams: &Vec<TcpStream>, message: String) {
     }
 }
 
+
+/// Spawns a thread that handles sending messages to all IP addresses in `send_addrs`.
+/// 
+/// # Example
+/// 
+/// ```rust
+/// let send_addrs: Vec<String> = vec![String::from("127.0.0.1"), String::from("127.0.0.2")];
+/// let port = String::from("7878");
+/// let username = String::from("Alice");
+/// start_sender_thread(send_addrs, port, username);
+/// ```
 fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) {
+
     thread::spawn(move || {
-        
         // start a sender stream for every IP the user wants to talk to
         let mut senders: Vec<TcpStream> = vec![];
         for addr in send_addrs {
@@ -62,7 +82,6 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
 
         loop {
             let mut message = String::new();
-
             // if let tries to match the output of read_line to Err, if it does match, it prints error message,
             // but if there is no error (Ok returned from read_line), then nothing happens
             if let Err(e) = io::stdin().read_line(&mut message) {
@@ -79,13 +98,20 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
 
             // send your message along with your username so others know who sent it
             message = format!("[{username}] {message}");
-
             send_to_all_connections(&senders, message);
         }
     });
 }
 
 
+/// Starts listening on `0.0.0.0:[port]` for incoming connections and starts a thread to send to each `addr` in `send_addrs` on `[addr]:[port]`.
+/// 
+/// # Example
+/// 
+/// ```rust
+/// let args: Vec<String> = args().collect();
+/// run_client_server(&args[3..], args[2].clone(), args[1].clone());
+/// ```
 fn run_client_server(send_addrs: &[String], port: String, username: String) {
     
     println!("Starting listener...");
@@ -102,8 +128,6 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
     };
     println!("Successfully started listener.");
 
-
-
     println!("Starting sender thread...");
     let mut send_addrs_clone: Vec<String> = vec![];
     for addr in send_addrs {
@@ -112,9 +136,7 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
     start_sender_thread(send_addrs_clone, port, username);
     println!("Successfully started sender thread.");
 
-
     // start handling incoming data and printing it to the terminal
-
     for stream in listener.incoming() {
         let mut stream = match stream {
             Ok(s) => s,
@@ -126,7 +148,6 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
     
         // create new thread for each incoming stream to handle more than one connection
         thread::spawn(move || {
-
             let mut buffer: [u8; 512] = [0; 512];
             loop {
                 let num_bytes_read = match stream.read(&mut buffer) {
@@ -148,10 +169,11 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
     }
 }
 
+
 fn main() {
+
     // put all the command line arguments into a vector
     let args: Vec<String> = args().collect();
-    
     if args.len() < 5 {
         eprintln!("Please specify a username, port number, and any number of IP addresses to connect to.\nUsage: cargo run p2p_client [username] [port number] [IP address ...]");
         process::exit(1);  // exit with error code 1 (common failure)
