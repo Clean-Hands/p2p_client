@@ -9,6 +9,7 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::env::args;
 use std::process;
+mod packet;
 
 fn send_to_all_connections(streams: &Vec<TcpStream>, message: String) {
     for mut stream in streams {
@@ -133,12 +134,17 @@ fn connect_sender_stream(send_ip: String, port: &String, username: &String) -> T
 
 fn main() {
     // put all the command line arguments into a vector
-    let args: Vec<String> = args().collect();
+    // let args: Vec<String> = args().collect();
     
-    if args.len() < 5 {
-        eprintln!("Please specify a username, port number, and any number of IP addresses to connect to.\nUsage: cargo run p2p_client [username] [port number] [IP address ...]");
-        process::exit(1);  // exit with error code 1 (common failure)
-    }
+    // if args.len() < 5 {
+    //     eprintln!("Please specify a username, port number, and any number of IP addresses to connect to.\nUsage: cargo run p2p_client [username] [port number] [IP address ...]");
+    //     process::exit(1);  // exit with error code 1 (common failure)
+    // }
 
-    run_client_server(&args[4..], &args[3], &args[2]);
+    // run_client_server(&args[4..], &args[3], &args[2]);
+    let filename = String::from("please_work.txt");
+    let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
+    let file_hash: [u8; 32] = [7; 32];
+    let my_packet = packet::encode_packet(filename, data, file_hash);
+    print!("{:?}", my_packet);
 }
