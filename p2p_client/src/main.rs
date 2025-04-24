@@ -186,5 +186,6 @@ fn main() {
     let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
     let file_hash: [u8; 32] = [7; 32];
     let my_packet = packet::encode_packet(filename, data, file_hash);
-    print!("{:?}", my_packet);
+    println!("{:?}", my_packet);
+    println!("{:?}", packet::decode_packet(my_packet));
 }
