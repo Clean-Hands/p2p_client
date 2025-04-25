@@ -9,7 +9,7 @@ use byteorder::{ByteOrder, BigEndian};
 
 /// Packet struct to contain relevant items of our packet protocol 
 /// 
-/// packets are always 512 bytes long (padded with 0s as neede)
+/// packets are always 512 bytes long (padded with 0s as needed)
 #[derive(Default, Debug)]
 pub struct Packet {
     data_length: u16, // the sum of all bytes in packet EXCEPT padding bytes
