@@ -182,6 +182,7 @@ fn main() {
 
     run_client_server(&args[4..], args[3].clone(), args[2].clone());
 
+    // packet tests
     let filename = String::from("please_work.txt");
     let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
     let file_hash: [u8; 32] = [7; 32];
