@@ -10,6 +10,7 @@ A TL;DR to run the containers:
 - From the root directory of cs347:
   - ```docker build -f docker/Dockerfile -t p2p_client .```
   - ```docker run -it --rm --network bridge p2p_client```
+
 As many peers as needed can be set up in this way. 
 
 We also are writing basic tests in main functions as we code to verify that the code appears to be working as intended.
