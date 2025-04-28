@@ -3,6 +3,12 @@
 ## Automated Unit Testing
 We plan to use the [Rust unit test functionality](https://doc.rust-lang.org/rust-by-example/testing/unit_testing.html) managed by cargo.
 
+What we plan to test:
+- Packets:
+  - build a packet from input into bytes (valid input and empty input)
+  - decode packet from bytes into Packet struct
+  - verify packet using hash (fail and pass verification)
+
 ## Manual Testing
 We have created a rudimentary Docker container system that allows us to similate multiple peers on a single machine. Documentation can be found [here](https://github.com/rubenboero21/cs347/tree/main/docker).
 
