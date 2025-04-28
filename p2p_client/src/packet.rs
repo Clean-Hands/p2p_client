@@ -147,6 +147,7 @@ pub fn encode_packet(filename: String, data: Vec<u8>, file_hash: [u8; 32]) -> [u
 #[cfg(test)]
 mod tests {
     // use super::*;
+    // why can i not use super like in line above?
     use crate::packet::{self, Packet};
 
     #[test]
