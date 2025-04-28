@@ -19,3 +19,6 @@ target/
 # Liam, Ruben, and Lazuli added items:
 .DS_Store
 playground/
+
+# ignore .txt files
+*.txt

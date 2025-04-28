@@ -10,6 +10,7 @@ use std::time::Duration;
 use std::env::args;
 use std::process;
 mod packet;
+mod file_rw;
 
 
 /// Connects a `TcpStream` object to the address `[send_ip]:[port]` and returns said object.
@@ -183,10 +184,12 @@ fn main() {
     run_client_server(&args[4..], args[3].clone(), args[2].clone());
 
     // packet tests
-    let filename = String::from("please_work.txt");
-    let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
+    let filename = String::from("test.txt");
+    let data = file_rw::read_file_bytes(&filename);
     let file_hash: [u8; 32] = [7; 32];
-    let my_packet = packet::encode_packet(filename, data, file_hash);
+    let my_packet: [u8; 512] = packet::encode_packet(filename, data, file_hash);
     println!("{:?}", my_packet);
-    println!("{:?}", packet::decode_packet(my_packet));
+    let decoded_packet = packet::decode_packet(my_packet);
+    println!("{:?}", &decoded_packet);
+    file_rw::write_file_bytes("test_copy.txt", &decoded_packet.data);
 }

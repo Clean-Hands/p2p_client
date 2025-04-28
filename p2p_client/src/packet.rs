@@ -1,11 +1,12 @@
-// packet.rs
-// by Ruben Boero, Liam Keane
-// April 25th, 2025
-// CS347 Advanced Software Design
+//! packet.rs
+//! by Ruben Boero, Liam Keane
+//! April 25th, 2025
+//! CS347 Advanced Software Design
 
 use std::mem;
 use sha2::{Sha256, Digest};
 use byteorder::{ByteOrder, BigEndian};
+
 
 /// Packet struct to contain relevant items of our packet protocol 
 /// 
@@ -15,7 +16,7 @@ pub struct Packet {
     data_length: u16, // the sum of all bytes in packet EXCEPT padding bytes
     filename_len: u16,
     filename: String,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
     chunk_hash: [u8; 32], // chunk hash computed over data_length, filename_len, filename, and data fields
     file_hash: [u8; 32],  // using sha256 hashes always results in 32 bytes
 }
