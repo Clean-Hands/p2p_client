@@ -88,3 +88,23 @@ pub fn open_writable_file(file_path: &str) -> File {
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests { 
+    use super::*;
+    #[test]
+    fn test_read_write_file_bytes() {
+        let test_filename = "test_read_write_file.txt";
+
+        let expected_data = vec![104, 101, 108, 108, 111]; // "hello"
+        write_file_bytes(test_filename, &expected_data);
+
+        let actual_data = read_file_bytes(&test_filename.to_string());
+
+        assert_eq!(actual_data, expected_data);
+ 
+        // cleanup
+        std::fs::remove_file(test_filename).expect("Failed to remove file");
+    }
+}
