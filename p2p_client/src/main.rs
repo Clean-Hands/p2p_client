@@ -168,7 +168,7 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
                     }
                 };
 
-                match file_rw::write_file_bytes(&String::from("received_file.txt"), &packet.data) {
+                match file_rw::write_file_bytes(&packet.filename, &packet.data) {
                     Ok(_) => println!("Data successfully written to file."),
                     Err(e) => eprintln!("Unable to write bytes: {e}")
                 }
