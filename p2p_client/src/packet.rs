@@ -1,6 +1,6 @@
 //! packet.rs
-//! by Ruben Boero, Liam Keane
-//! April 25th, 2025
+//! by Ruben Boero, Liam Keane, Lazuli Kleinhans
+//! April 29th, 2025
 //! CS347 Advanced Software Design
 
 use std::mem;
@@ -28,7 +28,7 @@ pub struct Packet {
 }
 
 /// given a vector of bytes, compute and return the sha256 hash 
-fn compute_sha256_hash(data: Vec<u8>) -> [u8; 32]{
+pub fn compute_sha256_hash(data: &Vec<u8>) -> [u8; 32]{
     let mut hasher = Sha256::new();
     hasher.update(&data[..]);
 
@@ -84,7 +84,7 @@ pub fn decode_packet(packet_bytes: [u8; 512]) -> Result<Packet, String> {
     packet.chunk_hash = chunk_hash_arr;
     offset += mem::size_of::<u8>()*32; // 32 is len of sha256 hash
 
-    let chunk_hash = compute_sha256_hash(chunk_to_hash);
+    let chunk_hash = compute_sha256_hash(&chunk_to_hash);
     
     if chunk_hash != packet.chunk_hash {
         return Err("Computed chunk hash does not match chunk hash within packet.".to_string());
@@ -141,7 +141,7 @@ pub fn encode_packet(filename: String, data: Vec<u8>, file_hash: [u8; 32]) -> [u
     offset += data.len();
     
     // compute and append chunk hash
-    let chunk_hash = compute_sha256_hash(hash_vec);
+    let chunk_hash = compute_sha256_hash(&hash_vec);
     packet[offset..offset + chunk_hash.len()].copy_from_slice(&chunk_hash);
     offset += chunk_hash.len();
 

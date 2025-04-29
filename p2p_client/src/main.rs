@@ -1,10 +1,10 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans
-//! April 22nd, 2025
+//! April 29th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
-use std::io::{self, Write, Read};
+use std::io::{Write, Read};
 use std::thread::{self, sleep};
 use std::time::Duration;
 use std::env::args;
@@ -52,10 +52,10 @@ fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 /// let message = String::from("Hello, world!");
 /// let stream: TcpStream = send_to_all_connections(&senders, message);
 /// ```
-fn send_to_all_connections(streams: &Vec<TcpStream>, message: String) {
+fn send_to_all_connections(streams: &Vec<TcpStream>, message: [u8; 512]) {
 
     for mut stream in streams {
-        if let Err(e) = stream.write_all(message.as_bytes()) {
+        if let Err(e) = stream.write_all(&message) {
             eprintln!("Failed to write to stream: {e}");
             return;
         }
@@ -70,10 +70,10 @@ fn send_to_all_connections(streams: &Vec<TcpStream>, message: String) {
 /// ```rust
 /// let send_addrs: Vec<String> = vec![String::from("127.0.0.1"), String::from("127.0.0.2")];
 /// let port = String::from("7878");
-/// let username = String::from("Alice");
-/// start_sender_thread(send_addrs, port, username);
+/// let data = vec![104, 101, 108, 108, 111];
+/// start_sender_thread(send_addrs, port, data);
 /// ```
-fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) {
+fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String) {
 
     thread::spawn(move || {
         // start a sender stream for every IP the user wants to talk to
@@ -82,26 +82,17 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
             senders.push(connect_sender_stream(&addr, &port));
         }
 
-        loop {
-            let mut message = String::new();
-            // if let tries to match the output of read_line to Err, if it does match, it prints error message,
-            // but if there is no error (Ok returned from read_line), then nothing happens
-            if let Err(e) = io::stdin().read_line(&mut message) {
-                eprintln!("Failed to read line: {e}");
+        let file_bytes = match file_rw::read_file_bytes(&file_path) {
+            Ok(b) => b,
+            Err(e) => {
+                eprint!("{e}");
                 return;
             }
+        };
 
-            if message.trim() == String::from("/exit"){
-                println!("Goodbye!");
-                // tell other users you disconnected
-                send_to_all_connections(&senders, format!("[{username} disconnected]"));
-                process::exit(0);
-            }
-
-            // send your message along with your username so others know who sent it
-            message = format!("[{username}] {message}");
-            send_to_all_connections(&senders, message);
-        }
+        // send the packet
+        let message = packet::encode_packet(file_path, file_bytes.clone(), packet::compute_sha256_hash(&file_bytes));
+        send_to_all_connections(&senders, message);
     });
 }
 
@@ -114,7 +105,7 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
 /// let args: Vec<String> = args().collect();
 /// run_client_server(&args[3..], args[2].clone(), args[1].clone());
 /// ```
-fn run_client_server(send_addrs: &[String], port: String, username: String) {
+fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
     
     println!("Starting listener...");
     let listen_addr = String::from("0.0.0.0:") + &port;
@@ -135,7 +126,9 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
     for addr in send_addrs {
         send_addrs_clone.push(addr.clone());
     }
-    start_sender_thread(send_addrs_clone, port, username);
+
+    start_sender_thread(send_addrs_clone, port, file_path);
+
     println!("Successfully started sender thread.");
 
     // start handling incoming data and printing it to the terminal
@@ -164,8 +157,21 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
                     }
                 };
 
-                let received = String::from_utf8_lossy(&buffer[..num_bytes_read]);
-                println!("{}", received.trim());
+                let packet = match packet::decode_packet(buffer) {
+                    Ok(p) => {
+                        println!("Packet successfully decoded.");
+                        p
+                    },
+                    Err(e) => {
+                        eprintln!("Unable to decode packet: {e}");
+                        return;
+                    }
+                };
+
+                match file_rw::write_file_bytes(&String::from("received_file.txt"), &packet.data) {
+                    Ok(_) => println!("Data successfully written to file."),
+                    Err(e) => eprintln!("Unable to write bytes: {e}")
+                }
             }
         });
     }
@@ -177,7 +183,7 @@ fn main() {
     // put all the command line arguments into a vector
     let args: Vec<String> = args().collect();
     if args.len() < 4 {
-        eprintln!("Please specify a username, port number, and any number of IP addresses to connect to.\nUsage: cargo run [username] [port number] [IP address ...]");
+        eprintln!("Please specify a file path, port number, and any number of IP addresses to connect to.\nUsage: cargo run [file path] [port number] [IP address ...]");
         process::exit(1);  // exit with error code 1 (common failure)
     }
 
