@@ -91,7 +91,7 @@ pub fn open_writable_file(file_path: &str) -> File {
 
 
 #[cfg(test)]
-mod tests { 
+mod tests {
     use super::*;
     #[test]
     fn test_read_write_file_bytes() {
@@ -105,6 +105,51 @@ mod tests {
         assert_eq!(actual_data, expected_data);
  
         // cleanup
+        std::fs::remove_file(test_filename).expect("Failed to remove file");
+    }
+
+
+    #[test]
+    fn test_open_iterable_file_and_read_correct_bytes() {
+        let test_filename = "test_open_iterable_file.txt";
+        let expected_data = b"Ruben said Lazuli was here :)".to_vec();
+
+        write_file_bytes(test_filename, &expected_data);
+
+        let mut actual_data = vec![];
+        let bytes = open_iterable_file(&test_filename.to_string());
+
+        for byte in bytes {
+            match byte {
+                Ok(b) => actual_data.push(b),
+                Err(e) => panic!("Unable to read next byte: {e}"),
+            }
+        }
+
+        assert_eq!(actual_data, expected_data);
+
+        std::fs::remove_file(test_filename).expect("Failed to remove file");
+    }
+
+
+    #[test]
+    fn test_open_writable_file_and_write_bytes() {
+        use std::io::Write;
+
+        let test_filename = "test_open_writable_file.txt";
+        let write1 = b"partial write test ".to_vec();
+        let write2 = b"partial write test part 2 electric boogaloo".to_vec();
+        let mut expected_data = write1.clone();
+        expected_data.extend(&write2);
+
+        let mut file = open_writable_file(test_filename);
+        file.write_all(&write1).expect("Failed to write to file");
+        file.write_all(&write2).expect("Failed to write to file");
+
+        let actual_data = read_file_bytes(&test_filename.to_string());
+
+        assert_eq!(actual_data, expected_data);
+
         std::fs::remove_file(test_filename).expect("Failed to remove file");
     }
 }
