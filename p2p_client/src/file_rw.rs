@@ -1,6 +1,6 @@
 //! file_rw.rs
-//! by Lazuli Kleinhans
-//! April 28th, 2025
+//! by Lazuli Kleinhans and Ruben Boero
+//! April 29th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
@@ -151,5 +151,16 @@ mod tests {
         assert_eq!(actual_data, expected_data);
 
         std::fs::remove_file(test_filename).expect("Failed to remove file");
+    }
+
+
+    // do we want the read_file_bytes function to return an empty array? or do we want it to return a Result
+    // type that can contain an error or a filled vector?
+    #[test]
+    fn test_read_from_nonexistent_file() {
+        let nonexistent_file = "i_dont_exist.txt";
+        let data = read_file_bytes(&nonexistent_file.to_string());
+
+        assert_eq!(data, Vec::<u8>::new());
     }
 }
