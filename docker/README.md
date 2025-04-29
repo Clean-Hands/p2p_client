@@ -14,9 +14,9 @@
   - note the container IP that is printed when the container opens
     - if you miss it, can run ```hostname -i``` to get it again
   - run the rust app:
-    - ```cargo run p2p_client [username] [port] [IP address ...]```
+    - ```cargo run [username] [port] [IP address ...]```
     - for example:
-      - ```cargo run p2p_client Alice 7878 172.17.0.2```
+      - ```cargo run Alice 7878 172.17.0.2```
 
 # TODO
 - Every time code is changed, the containers need to be restarted. It is **very** tedious to start the rust app across multiple containers. A way to automate this or make it easier would be nice, but not needed.

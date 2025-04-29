@@ -176,10 +176,10 @@ fn main() {
 
     // put all the command line arguments into a vector
     let args: Vec<String> = args().collect();
-    if args.len() < 5 {
-        eprintln!("Please specify a username, port number, and any number of IP addresses to connect to.\nUsage: cargo run p2p_client [username] [port number] [IP address ...]");
+    if args.len() < 4 {
+        eprintln!("Please specify a username, port number, and any number of IP addresses to connect to.\nUsage: cargo run [username] [port number] [IP address ...]");
         process::exit(1);  // exit with error code 1 (common failure)
     }
 
-    run_client_server(&args[4..], args[3].clone(), args[2].clone());
+    run_client_server(&args[3..], args[2].clone(), args[1].clone());
 }
