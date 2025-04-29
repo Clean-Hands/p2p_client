@@ -11,14 +11,20 @@ use byteorder::{ByteOrder, BigEndian};
 /// Packet struct to contain relevant items of our packet protocol 
 /// 
 /// packets are always 512 bytes long (padded with 0s as needed)
+/// 
+/// data length: the sum of all bytes in packet EXCEPT padding bytes
+/// 
+/// chunk_hash: sha256 chunk hash computed over data_length, filename_len, filename, and data fields
+/// 
+/// file_hash: sha256 file hash computed over the entire contents of the file that is being sent
 #[derive(Default, Debug, PartialEq)]
 pub struct Packet {
-    pub data_length: u16, // the sum of all bytes in packet EXCEPT padding bytes
+    pub data_length: u16,
     pub filename_len: u16,
     pub filename: String,
     pub data: Vec<u8>,
-    pub chunk_hash: [u8; 32], // chunk hash computed over data_length, filename_len, filename, and data fields
-    pub file_hash: [u8; 32],  // using sha256 hashes always results in 32 bytes
+    pub chunk_hash: [u8; 32],
+    pub file_hash: [u8; 32],
 }
 
 /// given a vector of bytes, compute and return the sha256 hash 
@@ -36,7 +42,8 @@ fn compute_sha256_hash(data: Vec<u8>) -> [u8; 32]{
 
 /// extract data from packet and verify integrity via hash
 /// 
-/// returns Result type that contains Err if the chunk hash verification fails, and the Packet struct otherwise
+/// returns Result type that contains Err if the chunk hash verification fails, and the created 
+/// Packet struct otherwise
 pub fn decode_packet(packet_bytes: [u8; 512]) -> Result<Packet, String> {
     let mut packet: Packet = Packet{..Default::default()};
     let mut chunk_to_hash: Vec<u8> = vec![];
@@ -93,7 +100,6 @@ pub fn decode_packet(packet_bytes: [u8; 512]) -> Result<Packet, String> {
 
 /// wrap data in our packet protocol
 /// 
-// ensure that data should be type Vec
 /// input filename: name of the file that is being sent
 /// 
 /// input data: bytes that represent the chunk of the file being sent
@@ -146,6 +152,8 @@ pub fn encode_packet(filename: String, data: Vec<u8>, file_hash: [u8; 32]) -> [u
 }
 
 #[cfg(test)]
+// TODO: these tests aren't amazing since they assume that the output from functions are correct. 
+// The output is then hard coded in the tests. Not sure of better way to fix them. 
 mod tests {
     // use super::*;
     // why can i not use super like in line above?
