@@ -1,24 +1,29 @@
 //! file_rw.rs
-//! by Lazuli Kleinhans and Ruben Boero
+//! by Lazuli Kleinhans, Ruben Boero
 //! April 29th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
-use std::io::{self, Read};
-use std::process;
+use std::io::{Read, Bytes};
 
 
 /// Return a `Vec<u8>` filled with ALL of the bytes of the passed filename
 /// 
-/// If fails to read in file, returns an empty `Vec<u8>`
-/// 
 /// If you don't want to read in all of the bytes at once, consider using `open_iterable_file()`
-pub fn read_file_bytes(file_path: &String) -> Vec<u8> {
+/// 
+/// # Example
+/// 
+/// ```rust
+/// let bytes = match read_file_bytes(&String::from("test.txt")) {
+///     Ok(b) => b,
+///     Err(e) => eprintln!("{e}")
+/// };
+/// ```
+pub fn read_file_bytes(file_path: &String) -> Result<Vec<u8>, String> {
     match fs::read(file_path) {
-        Ok(d) => d,
-        Err(_) => {
-            eprintln!("Unable to read in file.");
-            vec![]
+        Ok(d) => Ok(d),
+        Err(e) => {
+            Err(format!("Unable to read in file: {e}"))
         }
     }
 }
@@ -32,7 +37,11 @@ pub fn read_file_bytes(file_path: &String) -> Vec<u8> {
 /// # Example
 /// 
 /// ```rust
-/// let bytes = file_rw::open_iterable_file(&String::from("test.txt"));
+/// let bytes = match open_iterable_file(&String::from("test.txt")) {
+///     Ok(b) => b,
+///     Err(e) => eprintln!("Failed to open file: {e}");
+/// };
+/// 
 /// for byte in bytes {
 ///     match byte {
 ///         Ok(b) => println!("{b}"),
@@ -40,26 +49,35 @@ pub fn read_file_bytes(file_path: &String) -> Vec<u8> {
 ///     }
 /// }
 /// ```
-pub fn open_iterable_file(file_path: &String) -> io::Bytes<File>{
+pub fn open_iterable_file(file_path: &String) -> Result<Bytes<File>, String> {
     let f = match File::open(file_path) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("Couldn't open file: {e}");
-            // TODO: decide on a better way to handle failure to read
-            process::exit(1);
+            return Err(format!("Couldn't open file: {e}"));
         }
     };
-    return f.bytes();
+    return Ok(f.bytes());
 }
 
 
-/// Writes all passed bytes to the passed file, and closes the file.
+/// Writes all passed bytes to the passed file, and closes the file
 /// 
 /// If you want to write bytes in multiple bursts, consider using `open_writable_file()`
-pub fn write_file_bytes(file_path: &str, bytes: &Vec<u8>) {
-    if let Err(e) = fs::write(file_path, bytes) {
-        eprintln!("Failed to write bytes to file: {e}");
-    };
+/// 
+/// # Example
+/// 
+/// ```rust
+/// if let Err(e) = write_file_bytes(&String::from("test.txt"), vec![104, 101, 108, 108, 111]) {
+///     eprintln!("{e}")
+/// }
+/// ```
+pub fn write_file_bytes(file_path: &String, bytes: &Vec<u8>) -> Result<(), String>{
+    match fs::write(file_path, bytes) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            Err(format!("Failed to write bytes to file: {e}"))
+        }
+    }
 }
 
 
@@ -71,23 +89,27 @@ pub fn write_file_bytes(file_path: &str, bytes: &Vec<u8>) {
 /// # Example
 /// 
 /// ```rust
-/// let mut file = open_writable_file("test.txt");
+/// let mut file = match open_writable_file(&String::from("test.txt")) {
+///     Ok(f) => f,
+///     Err(e) => eprintln!("Failed to open file: {e}");
+/// };
+///
 /// for byte in bytes {
 ///     if let Err(e) = file.write(&[byte]) {
 ///         eprintln!("Failed to write byte to file: {e}");
 ///     }
 /// }
 /// ```
-pub fn open_writable_file(file_path: &str) -> File {
+pub fn open_writable_file(file_path: &String) -> Result<File, String> {
     match File::create(file_path) {
-        Ok(f) => f,
+        Ok(f) => Ok(f),
         Err(e) => {
-            eprintln!("Couldn't open file: {e}");
-            // TODO: decide on a better way to handle failure to open file
-            process::exit(1);
+            return Err(format!("Couldn't open file: {e}"));
         }
     }
 }
+
+
 
 
 #[cfg(test)]
@@ -95,14 +117,16 @@ mod tests {
     use super::*;
     #[test]
     fn test_read_write_file_bytes() {
-        let test_filename = "test_read_write_file.txt";
+        let test_filename = "test_read_write_file.txt".to_string();
 
         let expected_data = vec![104, 101, 108, 108, 111]; // "hello"
-        write_file_bytes(test_filename, &expected_data);
+        if let Err(e) = write_file_bytes(&test_filename, &expected_data) {
+            panic!("{e}")
+        }
 
         let actual_data = read_file_bytes(&test_filename.to_string());
 
-        assert_eq!(actual_data, expected_data);
+        assert_eq!(actual_data, Ok(expected_data));
  
         // cleanup
         std::fs::remove_file(test_filename).expect("Failed to remove file");
@@ -111,13 +135,18 @@ mod tests {
 
     #[test]
     fn test_open_iterable_file_and_read_correct_bytes() {
-        let test_filename = "test_open_iterable_file.txt";
+        let test_filename = "test_open_iterable_file.txt".to_string();
         let expected_data = b"Ruben said Lazuli was here :)".to_vec();
-
-        write_file_bytes(test_filename, &expected_data);
+        
+        if let Err(e) = write_file_bytes(&test_filename, &expected_data) {
+            panic!("{e}")
+        }
 
         let mut actual_data = vec![];
-        let bytes = open_iterable_file(&test_filename.to_string());
+        let bytes = match open_iterable_file(&test_filename) {
+            Ok(b) => b,
+            Err(e) => panic!("{e}")
+        };
 
         for byte in bytes {
             match byte {
@@ -136,17 +165,23 @@ mod tests {
     fn test_open_writable_file_and_write_bytes() {
         use std::io::Write;
 
-        let test_filename = "test_open_writable_file.txt";
+        let test_filename = "test_open_writable_file.txt".to_string();
         let to_write1 = b"partial write test ".to_vec();
         let to_write2 = b"partial write test part 2 electric boogaloo".to_vec();
         let mut expected_data = to_write1.clone();
         expected_data.extend(&to_write2);
 
-        let mut file = open_writable_file(test_filename);
+        let mut file = match open_writable_file(&test_filename) {
+            Ok(f) => f,
+            Err(e) => panic!("{e}")
+        };
         file.write_all(&to_write1).expect("Failed to write to file");
         file.write_all(&to_write2).expect("Failed to write to file");
 
-        let actual_data = read_file_bytes(&test_filename.to_string());
+        let actual_data = match read_file_bytes(&test_filename) {
+            Ok(b) => b,
+            Err(e) => panic!("{e}")
+        };
 
         assert_eq!(actual_data, expected_data);
 
@@ -160,9 +195,9 @@ mod tests {
     #[test]
     fn test_read_from_nonexistent_file() {
         let nonexistent_file = "i_dont_exist.txt";
-        let data = read_file_bytes(&nonexistent_file.to_string());
-
-        assert_eq!(data, Vec::<u8>::new());
+        if let Ok(d) = read_file_bytes(&nonexistent_file.to_string()) {  
+            panic!("Was able to read data from nonexistent file: {:?}", d);
+        };
     }
 
 
@@ -172,12 +207,14 @@ mod tests {
     // if the function encountered an error or not. Returning Result type would allow us to check this
     #[test]
     fn test_write_to_nonexistent_dir() {
-        let nonexistent_path = "nonexistent_dir/neither_do_i.txt";
+        let nonexistent_path = "nonexistent_dir/neither_do_i.txt".to_string();
         let to_write = b"i will never be written to a file bc of the bad path".to_vec();
 
-        write_file_bytes(nonexistent_path, &to_write);
+        if let Ok(()) = write_file_bytes(&nonexistent_path, &to_write) {  
+            panic!("Was able to write data to nonexistent file.");
+        };
         
         // check the file was not created
-        assert!(!std::path::Path::new(nonexistent_path).exists());
+        assert!(!std::path::Path::new(&nonexistent_path).exists());
     }
 }
