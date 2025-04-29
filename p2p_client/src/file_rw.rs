@@ -189,9 +189,6 @@ mod tests {
     }
 
 
-    // do we want the read_file_bytes function to return an empty array? or do we want it to return a Result
-    // type that can contain an error or a filled vector? this would allow code to handle an error better 
-    // since we could check for en Err return
     #[test]
     fn test_read_from_nonexistent_file() {
         let nonexistent_file = "i_dont_exist.txt";
@@ -201,10 +198,6 @@ mod tests {
     }
 
 
-    // do we want write_file_bytes function to just print an error? or do we want it to return a Result type
-    // that would allow us to handle the error within the code since we can check for an Err return
-    // this test is useless rn, all it does is check that the path wasn't created. it has no way of telling
-    // if the function encountered an error or not. Returning Result type would allow us to check this
     #[test]
     fn test_write_to_nonexistent_dir() {
         let nonexistent_path = "nonexistent_dir/neither_do_i.txt".to_string();
