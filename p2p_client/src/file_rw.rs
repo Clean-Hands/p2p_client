@@ -137,14 +137,14 @@ mod tests {
         use std::io::Write;
 
         let test_filename = "test_open_writable_file.txt";
-        let write1 = b"partial write test ".to_vec();
-        let write2 = b"partial write test part 2 electric boogaloo".to_vec();
-        let mut expected_data = write1.clone();
-        expected_data.extend(&write2);
+        let to_write1 = b"partial write test ".to_vec();
+        let to_write2 = b"partial write test part 2 electric boogaloo".to_vec();
+        let mut expected_data = to_write1.clone();
+        expected_data.extend(&to_write2);
 
         let mut file = open_writable_file(test_filename);
-        file.write_all(&write1).expect("Failed to write to file");
-        file.write_all(&write2).expect("Failed to write to file");
+        file.write_all(&to_write1).expect("Failed to write to file");
+        file.write_all(&to_write2).expect("Failed to write to file");
 
         let actual_data = read_file_bytes(&test_filename.to_string());
 
@@ -155,12 +155,29 @@ mod tests {
 
 
     // do we want the read_file_bytes function to return an empty array? or do we want it to return a Result
-    // type that can contain an error or a filled vector?
+    // type that can contain an error or a filled vector? this would allow code to handle an error better 
+    // since we could check for en Err return
     #[test]
     fn test_read_from_nonexistent_file() {
         let nonexistent_file = "i_dont_exist.txt";
         let data = read_file_bytes(&nonexistent_file.to_string());
 
         assert_eq!(data, Vec::<u8>::new());
+    }
+
+
+    // do we want write_file_bytes function to just print an error? or do we want it to return a Result type
+    // that would allow us to handle the error within the code since we can check for an Err return
+    // this test is useless rn, all it does is check that the path wasn't created. it has no way of telling
+    // if the function encountered an error or not. Returning Result type would allow us to check this
+    #[test]
+    fn test_write_to_nonexistent_dir() {
+        let nonexistent_path = "nonexistent_dir/neither_do_i.txt";
+        let to_write = b"i will never be written to a file bc of the bad path".to_vec();
+
+        write_file_bytes(nonexistent_path, &to_write);
+        
+        // check the file was not created
+        assert!(!std::path::Path::new(nonexistent_path).exists());
     }
 }
