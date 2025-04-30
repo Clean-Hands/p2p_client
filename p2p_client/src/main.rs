@@ -82,6 +82,8 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
             senders.push(connect_sender_stream(&addr, &port));
         }
 
+        // Initiate DH exchange
+
         loop {
             let mut message = String::new();
             // if let tries to match the output of read_line to Err, if it does match, it prints error message,
