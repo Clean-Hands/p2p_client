@@ -4,7 +4,7 @@
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
-use std::io::{Read, Bytes};
+use std::io::{self, Read, Bytes};
 
 
 /// Return a `Vec<u8>` filled with ALL of the bytes of the passed filename
@@ -91,7 +91,10 @@ pub fn write_file_bytes(file_path: &String, bytes: &Vec<u8>) -> Result<(), Strin
 /// ```rust
 /// let mut file = match open_writable_file(&String::from("test.txt")) {
 ///     Ok(f) => f,
-///     Err(e) => eprintln!("Failed to open file: {e}");
+///     Err(e) => {
+///         eprintln!("Failed to open file: {e}");
+///         return;
+///     }
 /// };
 ///
 /// for byte in bytes {
@@ -103,10 +106,25 @@ pub fn write_file_bytes(file_path: &String, bytes: &Vec<u8>) -> Result<(), Strin
 pub fn open_writable_file(file_path: &String) -> Result<File, String> {
     match File::create(file_path) {
         Ok(f) => Ok(f),
-        Err(e) => {
-            return Err(format!("Couldn't open file: {e}"));
-        }
+        Err(e) => return Err(format!("Couldn't open file: {e}"))
     }
+}
+
+
+
+pub fn rename_file(file: &mut File, new_filename: &String) -> Result<File, String> {
+    let mut new_file = match open_writable_file(new_filename) {
+        Ok(f) => f,
+        Err(e) => return Err(format!("Failed to create new file to copy data into: {e}"))
+    };
+
+    // TODO: figure out a way to ensure that the number of bytes copied is equal to the
+    //       number of bytes within the original file
+    if let Err(e) = io::copy(file, &mut new_file) {
+        return Err(format!("Unable to copy data to new file: {e}"))
+    };
+
+    Ok(new_file)
 }
 
 
@@ -129,7 +147,7 @@ mod tests {
         assert_eq!(actual_data, Ok(expected_data));
  
         // cleanup
-        std::fs::remove_file(test_filename).expect("Failed to remove file");
+        fs::remove_file(test_filename).expect("Failed to remove file");
     }
 
 
@@ -157,7 +175,7 @@ mod tests {
 
         assert_eq!(actual_data, expected_data);
 
-        std::fs::remove_file(test_filename).expect("Failed to remove file");
+        fs::remove_file(test_filename).expect("Failed to remove file");
     }
 
 
@@ -185,7 +203,7 @@ mod tests {
 
         assert_eq!(actual_data, expected_data);
 
-        std::fs::remove_file(test_filename).expect("Failed to remove file");
+        fs::remove_file(test_filename).expect("Failed to remove file");
     }
 
 
@@ -200,6 +218,8 @@ mod tests {
 
     #[test]
     fn test_write_to_nonexistent_dir() {
+        use std::path::Path;
+
         let nonexistent_path = "nonexistent_dir/neither_do_i.txt".to_string();
         let to_write = b"i will never be written to a file bc of the bad path".to_vec();
 
@@ -208,6 +228,6 @@ mod tests {
         };
         
         // check the file was not created
-        assert!(!std::path::Path::new(&nonexistent_path).exists());
+        assert!(!Path::new(&nonexistent_path).exists());
     }
 }

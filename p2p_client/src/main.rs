@@ -9,6 +9,8 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::env::args;
 use std::process;
+
+use file_rw::rename_file;
 mod packet;
 mod file_rw;
 
@@ -144,35 +146,62 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
         // create new thread for each incoming stream to handle more than one connection
         thread::spawn(move || {
             let mut buffer: [u8; 512] = [0; 512];
+            let mut received_file_name = String::from("file.tmp");
+            let mut file = match file_rw::open_writable_file(&received_file_name) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return;
+                }
+            };
+
             loop {
-                let num_bytes_read = match stream.read(&mut buffer) {
+                match stream.read(&mut buffer) {
                     Ok(0) => {
                         println!("Partner disconnected");
                         break;
                     }
-                    Ok(n) => n,
+                    Ok(_) => (),
                     Err(e) => {
                         eprintln!("Failed to read from stream: {e}");
                         break;
                     }
                 };
 
-                let packet = match packet::decode_packet(buffer) {
+                let received_packet = match packet::decode_packet(buffer) {
                     Ok(p) => {
                         println!("Packet successfully decoded.");
                         p
                     },
                     Err(e) => {
                         eprintln!("Unable to decode packet: {e}");
-                        return;
+                        break;
                     }
                 };
 
-                match file_rw::write_file_bytes(&packet.filename, &packet.data) {
-                    Ok(_) => println!("Data successfully written to file."),
-                    Err(e) => eprintln!("Unable to write bytes: {e}")
+                let data_bytes = received_packet.data.len();
+
+                // If the file name has not been updated yet, update it
+                if received_file_name == "file.tmp" {
+                    received_file_name = received_packet.filename;
+                }
+
+                match file.write(&received_packet.data) {
+                    Ok(n) => {
+                        if n != data_bytes {
+                            eprintln!("Read {data_bytes} file bytes from stream, was only able to write {n} bytes to file")
+                        }
+                    },
+
+                    Err(e) => eprintln!("Failed to write byte to file: {e}")
                 }
             }
+
+            match rename_file(&mut file, &received_file_name) {
+                Ok(_) => (),
+                Err(e) => eprintln!("{e}")
+            }
+
         });
     }
 }
