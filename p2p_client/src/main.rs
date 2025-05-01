@@ -9,7 +9,7 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::env::args;
 use std::process;
-use x25519_dalek::{EphemeralSecret, PublicKey};
+use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
 use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm, Nonce, Key
@@ -17,6 +17,12 @@ use aes_gcm::{
 mod packet;
 mod file_rw;
 
+struct ConnectionInfo {
+    sender_stream: TcpStream,
+    dh_public_key: PublicKey,
+    dh_private_key: EphemeralSecret,
+    dh_shared_secret: Option<SharedSecret>,
+}
 
 /// Connects a `TcpStream` object to the address `[send_ip]:[port]` and returns said object.
 /// 
@@ -82,18 +88,25 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
 
     thread::spawn(move || {
         // start a sender stream for every IP the user wants to talk to
-        let mut senders: Vec<TcpStream> = vec![];
-        for addr in send_addrs {
-            senders.push(connect_sender_stream(&addr, &port));
+        let mut senders: Vec<ConnectionInfo> = vec![];
+
+        for addr in &send_addrs {
+            let sender_secret = EphemeralSecret::random_from_rng(&mut OsRng);
+            let info = ConnectionInfo {
+                sender_stream: connect_sender_stream(addr, &port),
+                dh_public_key: PublicKey::from(&sender_secret),
+                dh_private_key: sender_secret,
+                dh_shared_secret: None
+            };
+            senders.push(info);
         }
 
-        // Initiate DH exchange:
-        // === sender generates keypair ===
-        let sender_secret = EphemeralSecret::random_from_rng(&mut OsRng);
-        let sender_public = PublicKey::from(&sender_secret);
-
-        // === sender reads the receiver's public key ===
-        
+        // carry out DH exchange
+        for connection in &senders{
+            // send public key to listener
+            // wait for public key response from listener
+            // compute and save shared secret in struct
+        }
 
         loop {
             let mut message = String::new();
