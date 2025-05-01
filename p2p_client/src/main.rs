@@ -84,7 +84,7 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
             senders.push(connect_sender_stream(&addr, &port));
         }
 
-        let file_bytes = match file_rw::read_file_bytes(&file_path) {
+        let mut file_bytes = match file_rw::open_iterable_file(&file_path) {
             Ok(b) => b,
             Err(e) => {
                 eprint!("{e}");
@@ -92,9 +92,25 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
             }
         };
 
-        // send the packet
-        let message = packet::encode_packet(file_path, file_bytes.clone(), packet::compute_sha256_hash(&file_bytes));
-        send_to_all_connections(&senders, message);
+        loop {
+            let mut write_bytes: Vec<u8> = vec![];
+            // just grab 400 bytes for now
+            for _ in 0..400 {
+                match file_bytes.next() {
+                    Some(Ok(b)) => write_bytes.push(b),
+                    Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
+                    None => {
+                        // send the last packet
+                        let message = packet::encode_packet(file_path.clone(), write_bytes.clone(), packet::compute_sha256_hash(&write_bytes));
+                        send_to_all_connections(&senders, message);
+                        return
+                    }
+                }
+            }
+            // encode the data and send the packet
+            let message = packet::encode_packet(file_path.clone(), write_bytes.clone(), packet::compute_sha256_hash(&write_bytes));
+            send_to_all_connections(&senders, message);
+        }
     });
 }
 
