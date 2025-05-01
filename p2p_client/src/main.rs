@@ -9,6 +9,11 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::env::args;
 use std::process;
+use x25519_dalek::{EphemeralSecret, PublicKey};
+use aes_gcm::{
+    aead::{Aead, AeadCore, KeyInit, OsRng},
+    Aes256Gcm, Nonce, Key
+};
 mod packet;
 mod file_rw;
 
@@ -82,7 +87,13 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
             senders.push(connect_sender_stream(&addr, &port));
         }
 
-        // Initiate DH exchange
+        // Initiate DH exchange:
+        // === sender generates keypair ===
+        let sender_secret = EphemeralSecret::random_from_rng(&mut OsRng);
+        let sender_public = PublicKey::from(&sender_secret);
+
+        // === sender reads the receiver's public key ===
+        
 
         loop {
             let mut message = String::new();
