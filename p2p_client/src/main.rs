@@ -94,8 +94,9 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
         };
 
         // send only the file name + extension, w/o full path
-        let filename = Path::new(&file_path).file_name().expect("Missing filename").to_str().expect("Unable to convert OsStr");
+        let filename = Path::new(&file_path).file_name().expect("Missing filename").to_str().expect("Unable to convert OsStr to str");
 
+        // write packets until EOF 
         loop {
             let mut write_bytes: Vec<u8> = vec![];
             // just grab 400 bytes for now
@@ -104,7 +105,7 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
                     Some(Ok(b)) => write_bytes.push(b),
                     Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
                     None => {
-                        // send the last packet
+                        // when trying to read the next byte, we read EOF so send the last packet and return
                         let message = packet::encode_packet(String::from(filename), write_bytes.clone(), packet::compute_sha256_hash(&write_bytes));
                         send_to_all_connections(&senders, message);
                         return
@@ -190,7 +191,6 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
 
                 let received_packet = match packet::decode_packet(buffer) {
                     Ok(p) => {
-                        println!("Packet successfully decoded.");
                         p
                     },
                     Err(e) => {
