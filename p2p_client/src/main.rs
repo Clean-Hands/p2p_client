@@ -51,9 +51,9 @@ fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 /// # Example
 /// 
 /// ```rust
-/// let senders: Vec<TcpStream> = vec![stream1, stream2];
+/// let streams: Vec<TcpStream> = vec![stream1, stream2];
 /// let message = String::from("Hello, world!");
-/// let stream: TcpStream = send_to_all_connections(&senders, message);
+/// send_to_all_connections(&streams, message);
 /// ```
 fn send_to_all_connections(streams: &Vec<TcpStream>, message: [u8; 512]) {
 
@@ -73,8 +73,8 @@ fn send_to_all_connections(streams: &Vec<TcpStream>, message: [u8; 512]) {
 /// ```rust
 /// let send_addrs: Vec<String> = vec![String::from("127.0.0.1"), String::from("127.0.0.2")];
 /// let port = String::from("7878");
-/// let data = vec![104, 101, 108, 108, 111];
-/// start_sender_thread(send_addrs, port, data);
+/// let file_path = String::from("test.txt");
+/// start_sender_thread(send_addrs, port, file_path);
 /// ```
 fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String) {
 
