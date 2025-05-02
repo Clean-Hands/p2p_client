@@ -9,6 +9,7 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::env::args;
 use std::process;
+use std::path::Path;
 
 use file_rw::rename_file;
 mod packet;
@@ -92,6 +93,9 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
             }
         };
 
+        // send only the file name + extension, w/o full path
+        let filename = Path::new(&file_path).file_name().expect("Missing filename").to_str().expect("Unable to convert OsStr");
+
         loop {
             let mut write_bytes: Vec<u8> = vec![];
             // just grab 400 bytes for now
@@ -101,7 +105,7 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
                     Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
                     None => {
                         // send the last packet
-                        let message = packet::encode_packet(file_path.clone(), write_bytes.clone(), packet::compute_sha256_hash(&write_bytes));
+                        let message = packet::encode_packet(String::from(filename), write_bytes.clone(), packet::compute_sha256_hash(&write_bytes));
                         send_to_all_connections(&senders, message);
                         return
                     }
