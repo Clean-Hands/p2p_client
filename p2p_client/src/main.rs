@@ -179,8 +179,9 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
             loop {
                 match stream.read(&mut buffer) {
                     Ok(0) => {
+                        // End connection
                         println!("Partner disconnected");
-                        break;
+                        return;
                     }
                     Ok(_) => (),
                     Err(e) => {
@@ -190,38 +191,32 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
                 };
 
                 let received_packet = match packet::decode_packet(buffer) {
-                    Ok(p) => {
-                        p
-                    },
+                    Ok(p) => p,
                     Err(e) => {
                         eprintln!("Unable to decode packet: {e}");
                         break;
                     }
                 };
 
-                let data_bytes = received_packet.data.len();
-
                 // If the file name has not been updated yet, update it
                 if received_file_name == "file.tmp" {
                     received_file_name = received_packet.filename;
                 }
-
+                
+                let data_bytes = received_packet.data.len();
                 match file.write(&received_packet.data) {
                     Ok(n) => {
                         if n != data_bytes {
                             eprintln!("Read {data_bytes} file bytes from stream, was only able to write {n} bytes to file")
                         }
                     },
-
                     Err(e) => eprintln!("Failed to write byte to file: {e}")
                 }
             }
 
-            match rename_file(&mut file, &received_file_name) {
-                Ok(_) => (),
-                Err(e) => eprintln!("{e}")
+            if let Err(e) = rename_file(&mut file, &received_file_name) {
+                eprintln!("{e}")
             }
-
         });
     }
 }
