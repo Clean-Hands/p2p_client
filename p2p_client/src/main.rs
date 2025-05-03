@@ -9,10 +9,10 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::env::args;
 use std::process;
-use std::mem::replace;
+use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{Aead, AeadCore, KeyInit, OsRng, },
     Aes256Gcm, Nonce, Key
 };
 mod packet;
@@ -21,9 +21,26 @@ mod file_rw;
 struct ConnectionInfo {
     sender_stream: TcpStream,
     dh_public_key: PublicKey,
-    dh_private_key: EphemeralSecret,
+    dh_private_key: Option<EphemeralSecret>,
     dh_shared_secret: Option<SharedSecret>,
+    cipher: Option<Aes256Gcm>,
+    nonce: [u8; 12]
 }
+
+// TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
+// should probably be incrementing a bit a time, not a byte
+/// increment the nonce within the struct
+fn increment_nonce(nonce: &mut [u8; 12]) {
+    for i in (0..12).rev() {
+        if nonce[i] == 0xFF {
+            nonce[i] = 0;
+        } else {
+            nonce[i] += 1;
+            break;
+        }
+    }
+}
+
 
 /// Connects a `TcpStream` object to the address `[send_ip]:[port]` and returns said object.
 /// 
@@ -67,7 +84,15 @@ fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: String) {
 
     for stream in streams {
-        if let Err(e) = stream.sender_stream.write_all(message.as_bytes()) {
+
+        // encrypt message
+        let nonce = Nonce::from_slice(&stream.nonce);
+        let ciphertext = stream.cipher.as_ref().unwrap().encrypt(&nonce, message.as_ref());
+
+        // increment nonce (in the struct itself)
+        increment_nonce(&mut stream.nonce);
+        
+        if let Err(e) = stream.sender_stream.write_all(&ciphertext.unwrap()) {
             eprintln!("Failed to write to stream: {e}");
             return;
         }
@@ -97,8 +122,10 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
             let info = ConnectionInfo {
                 sender_stream: stream,
                 dh_public_key: PublicKey::from(&sender_secret),
-                dh_private_key: sender_secret,
-                dh_shared_secret: None
+                dh_private_key: Some(sender_secret),
+                dh_shared_secret: None,
+                cipher: None,
+                nonce: [0u8; 12]
             };
             senders.push(info);
         }
@@ -119,18 +146,28 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
             // compute and save shared secret in struct
             // TODO: find out why we need to replace the shared secret within the struct
             //       and get rid of the gross code below
-            let dh_private_key = std::mem::replace (
-                &mut connection.dh_private_key,
-                EphemeralSecret::random_from_rng(&mut OsRng), // replace with throwaway
-            );
-            connection.dh_shared_secret = Some(dh_private_key.diffie_hellman(&peer_public_key));
+            // let dh_private_key = std::mem::replace (
+            //     &mut connection.dh_private_key,
+            //     EphemeralSecret::random_from_rng(&mut OsRng), // replace with throwaway
+            // );
+            //
+            if let Some(secret) = connection.dh_private_key.take() {
+                connection.dh_shared_secret = Some(secret.diffie_hellman(&peer_public_key));
+            }
             
 
             // debug
             println!("SENDER PUBLIC KEY {:?}:", public_key_bytes);
             if let Some(secret) = &connection.dh_shared_secret {
-                println!("SHARED SECRET (sender): {:02x?}", secret.as_bytes());
+                println!("SENDER SHARED SECRET: {:02x?}", secret.as_bytes());
             }
+
+            // generate and store AES cipher
+            if let Some(secret) = connection.dh_shared_secret.take() {
+                let key = Key::<Aes256Gcm>::from_slice(secret.as_bytes());
+                connection.cipher = Some(Aes256Gcm::new(key));
+            }
+            
         }
 
         // commence encrypted messaging
@@ -217,14 +254,18 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
                 return;
             }
 
-            //debug
-            println!("RECEIVER PUBLIC KEY {:?}:", public_key_bytes);
-
             // generate shared secret
             let shared_secret = my_private_key.diffie_hellman(&peer_public_key);
+
+            //debug
+            println!("RECEIVER PUBLIC KEY {:?}:", public_key_bytes);
             println!("RECEIVER SHARED SECRET {:02x?}:", shared_secret.as_bytes());
 
-            // read ciphertext and decrypt message into plaintext
+            // generate AES cipher to decrypt messages
+            let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
+            let cipher = Aes256Gcm::new(key);
+            let mut initial_nonce: [u8; 12] = [0; 12];       
+            
             let mut buffer: [u8; 512] = [0; 512];
             loop {
                 let num_bytes_read = match stream.read(&mut buffer) {
@@ -239,8 +280,20 @@ fn run_client_server(send_addrs: &[String], port: String, username: String) {
                     }
                 };
 
-                let received = String::from_utf8_lossy(&buffer[..num_bytes_read]);
-                println!("{}", received.trim());
+                // decrypt
+                let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
+
+                increment_nonce(&mut initial_nonce);
+
+                match cipher.decrypt(&nonce, &buffer[..num_bytes_read]) {
+                    Ok(plaintext) => {
+                        let received = String::from_utf8_lossy(&plaintext);
+                        println!("{}", received.trim());
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to decrypt message: {e}");
+                    }
+                }
             }
         });
     }
