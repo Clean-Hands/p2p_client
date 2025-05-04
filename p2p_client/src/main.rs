@@ -12,13 +12,18 @@ use std::process;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng, },
+    aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce, Key
 };
 mod packet;
 mod file_rw;
 
-struct ConnectionInfo {
+// Oliver advice:
+// 1. potential async use case instead of threads?
+// 2. use clap for creating CLI
+// 3. consider using enum for private key and shared secret (nothing stored/Secret stored)
+
+ struct ConnectionInfo {
     sender_stream: TcpStream,
     dh_public_key: PublicKey,
     dh_private_key: Option<EphemeralSecret>,
@@ -31,11 +36,14 @@ struct ConnectionInfo {
 // should probably be incrementing a bit a time, not a byte
 /// increment the nonce within the struct
 fn increment_nonce(nonce: &mut [u8; 12]) {
-    for i in (0..12).rev() {
-        if nonce[i] == 0xFF {
-            nonce[i] = 0;
+    let mut carry = true;
+
+    for byte in nonce.iter_mut().rev() {
+        if carry {
+            let (new_byte, overflow) = byte.overflowing_add(1);
+            *byte = new_byte;
+            carry = overflow;
         } else {
-            nonce[i] += 1;
             break;
         }
     }
@@ -87,12 +95,26 @@ fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: String) {
 
         // encrypt message
         let nonce = Nonce::from_slice(&stream.nonce);
-        let ciphertext = stream.cipher.as_ref().unwrap().encrypt(&nonce, message.as_ref());
+        // let ciphertext = stream.cipher.as_ref().unwrap().encrypt(&nonce, message.as_ref());
+        let ciphertext = match stream.cipher.as_ref() {
+            Some(cipher) => match cipher.encrypt(&nonce, message.as_ref()) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Encryption failed: {}", e);
+                    continue; // or `return` if you want to exit entirely
+                }
+            },
+            None => {
+                eprintln!("Failed to initialize cipher");
+                continue; // or `return`
+            }
+        };
+        
 
         // increment nonce (in the struct itself)
         increment_nonce(&mut stream.nonce);
         
-        if let Err(e) = stream.sender_stream.write_all(&ciphertext.unwrap()) {
+        if let Err(e) = stream.sender_stream.write_all(&ciphertext) {
             eprintln!("Failed to write to stream: {e}");
             return;
         }
