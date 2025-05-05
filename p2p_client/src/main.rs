@@ -41,6 +41,7 @@ fn increment_nonce(nonce: &mut [u8; 12]) {
     for byte in nonce.iter_mut().rev() {
         if carry {
             let (new_byte, overflow) = byte.overflowing_add(1);
+            // dereference nonce's byte and update its actual value
             *byte = new_byte;
             carry = overflow;
         } else {
@@ -95,7 +96,6 @@ fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: String) {
 
         // encrypt message
         let nonce = Nonce::from_slice(&stream.nonce);
-        // let ciphertext = stream.cipher.as_ref().unwrap().encrypt(&nonce, message.as_ref());
         let ciphertext = match stream.cipher.as_ref() {
             Some(cipher) => match cipher.encrypt(&nonce, message.as_ref()) {
                 Ok(c) => c,
@@ -166,18 +166,10 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
             let peer_public_key = PublicKey::from(public_key_bytes);
 
             // compute and save shared secret in struct
-            // TODO: find out why we need to replace the shared secret within the struct
-            //       and get rid of the gross code below
-            // let dh_private_key = std::mem::replace (
-            //     &mut connection.dh_private_key,
-            //     EphemeralSecret::random_from_rng(&mut OsRng), // replace with throwaway
-            // );
-            //
             if let Some(secret) = connection.dh_private_key.take() {
                 connection.dh_shared_secret = Some(secret.diffie_hellman(&peer_public_key));
             }
             
-
             // debug
             println!("SENDER PUBLIC KEY {:?}:", public_key_bytes);
             if let Some(secret) = &connection.dh_shared_secret {
@@ -185,6 +177,7 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, username: String) 
             }
 
             // generate and store AES cipher
+            // TODO: handle the case where secret is not Some
             if let Some(secret) = connection.dh_shared_secret.take() {
                 let key = Key::<Aes256Gcm>::from_slice(secret.as_bytes());
                 connection.cipher = Some(Aes256Gcm::new(key));
