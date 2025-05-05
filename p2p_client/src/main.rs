@@ -1,6 +1,6 @@
 //! main.rs
-//! by Ruben Boero, Lazuli Kleinhans
-//! April 29th, 2025
+//! by Ruben Boero, Lazuli Kleinhans, Liam Keane
+//! May 5th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
@@ -10,10 +10,47 @@ use std::time::Duration;
 use std::env::args;
 use std::process;
 use std::path::Path;
-
 use file_rw::rename_file;
+use sha2::digest::generic_array::{GenericArray, typenum::U12};
+use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
+use aes_gcm::{
+    aead::{Aead, KeyInit, OsRng},
+    Aes256Gcm, Nonce, Key
+};
 mod packet;
 mod file_rw;
+
+// Oliver advice:
+// 1. potential async use case instead of threads?
+// 2. use clap for creating CLI
+// 3. consider using enum for private key and shared secret (nothing stored/Secret stored)
+
+ struct ConnectionInfo {
+    sender_stream: TcpStream,
+    dh_public_key: PublicKey,
+    dh_private_key: Option<EphemeralSecret>,
+    dh_shared_secret: Option<SharedSecret>,
+    cipher: Option<Aes256Gcm>,
+    nonce: [u8; 12]
+}
+
+// TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
+// should probably be incrementing a bit a time, not a byte
+/// increment the nonce within the struct
+fn increment_nonce(nonce: &mut [u8; 12]) {
+    let mut carry = true;
+
+    for byte in nonce.iter_mut().rev() {
+        if carry {
+            let (new_byte, overflow) = byte.overflowing_add(1);
+            // dereference nonce's byte and update its actual value
+            *byte = new_byte;
+            carry = overflow;
+        } else {
+            break;
+        }
+    }
+}
 
 
 /// Connects a `TcpStream` object to the address `[send_ip]:[port]` and returns said object.
@@ -55,10 +92,31 @@ fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 /// let message = String::from("Hello, world!");
 /// send_to_all_connections(&streams, message);
 /// ```
-fn send_to_all_connections(streams: &Vec<TcpStream>, message: [u8; 512]) {
+fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: [u8; 512]) {
 
-    for mut stream in streams {
-        if let Err(e) = stream.write_all(&message) {
+    for stream in streams {
+
+        // encrypt message
+        let nonce = Nonce::from_slice(&stream.nonce);
+        let ciphertext = match stream.cipher.as_ref() {
+            Some(cipher) => match cipher.encrypt(&nonce, message.as_ref()) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Encryption failed: {}", e);
+                    continue; // or `return` if you want to exit entirely
+                }
+            },
+            None => {
+                eprintln!("Failed to initialize cipher");
+                continue; // or `return`
+            }
+        };
+        
+
+        // increment nonce (in the struct itself)
+        increment_nonce(&mut stream.nonce);
+        
+        if let Err(e) = stream.sender_stream.write_all(&ciphertext) {
             eprintln!("Failed to write to stream: {e}");
             return;
         }
@@ -80,9 +138,53 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
 
     thread::spawn(move || {
         // start a sender stream for every IP the user wants to talk to
-        let mut senders: Vec<TcpStream> = vec![];
-        for addr in send_addrs {
-            senders.push(connect_sender_stream(&addr, &port));
+        let mut senders: Vec<ConnectionInfo> = vec![];
+
+        for addr in &send_addrs {
+            let sender_secret = EphemeralSecret::random_from_rng(&mut OsRng);
+            let stream = connect_sender_stream(addr, &port);
+            let info = ConnectionInfo {
+                sender_stream: stream,
+                dh_public_key: PublicKey::from(&sender_secret),
+                dh_private_key: Some(sender_secret),
+                dh_shared_secret: None,
+                cipher: None,
+                nonce: [0u8; 12]
+            };
+            senders.push(info);
+        }
+       
+        // carry out DH exchange
+        for connection in &mut senders {
+            // send public key to listener
+            if let Err(e) = connection.sender_stream.write_all(connection.dh_public_key.as_bytes()) {
+                eprintln!("Failed to send DH public key: {e}");
+                return;
+            }
+
+            // wait for public key response from listener
+            let mut public_key_bytes = [0u8; 32];
+            connection.sender_stream.read_exact(&mut public_key_bytes).expect("Failed to read peer's public key");
+            let peer_public_key = PublicKey::from(public_key_bytes);
+
+            // compute and save shared secret in struct
+            if let Some(secret) = connection.dh_private_key.take() {
+                connection.dh_shared_secret = Some(secret.diffie_hellman(&peer_public_key));
+            }
+            
+            // debug
+            println!("SENDER PUBLIC KEY {:?}:", public_key_bytes);
+            if let Some(secret) = &connection.dh_shared_secret {
+                println!("SENDER SHARED SECRET: {:02x?}", secret.as_bytes());
+            }
+
+            // generate and store AES cipher
+            // TODO: handle the case where secret is not Some
+            if let Some(secret) = connection.dh_shared_secret.take() {
+                let key = Key::<Aes256Gcm>::from_slice(secret.as_bytes());
+                connection.cipher = Some(Aes256Gcm::new(key));
+            }
+            
         }
 
         let mut file_bytes = match file_rw::open_iterable_file(&file_path) {
@@ -94,7 +196,7 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
         };
 
         // send only the file name + extension, w/o full path
-        let filename = Path::new(&file_path).file_name().expect("Missing filename").to_str().expect("Unable to convert OsStr to str");
+        // let filename = Path::new(&file_path).file_name().expect("Missing filename").to_str().expect("Unable to convert OsStr to str");
 
         // write packets until EOF 
         loop {
@@ -106,15 +208,15 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
                     Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
                     None => {
                         // when trying to read the next byte, we read EOF so send the last packet and return
-                        let message = packet::encode_packet(String::from(filename), write_bytes.clone(), packet::compute_sha256_hash(&write_bytes));
-                        send_to_all_connections(&senders, message);
+                        let message = packet::encode_packet(write_bytes);
+                        send_to_all_connections(&mut senders, message);
                         return
                     }
                 }
             }
             // encode the data and send the packet
-            let message = packet::encode_packet(file_path.clone(), write_bytes.clone(), packet::compute_sha256_hash(&write_bytes));
-            send_to_all_connections(&senders, message);
+            let message = packet::encode_packet(write_bytes);
+            send_to_all_connections(&mut senders, message);
         }
     });
 }
@@ -166,6 +268,33 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
     
         // create new thread for each incoming stream to handle more than one connection
         thread::spawn(move || {
+            // generate DH exchange info
+            let my_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
+            let my_public_key = PublicKey::from(&my_private_key);
+
+            // read public key from sender
+            let mut public_key_bytes = [0u8; 32];
+            stream.read_exact(&mut public_key_bytes).expect("Failed to read peer's public key");
+            let peer_public_key = PublicKey::from(public_key_bytes);
+
+            // send our public key to sender
+            if let Err(e) = stream.write_all(my_public_key.as_bytes()) {
+                eprintln!("Failed to send my public key: {e}");
+                return;
+            }
+
+            // generate shared secret
+            let shared_secret = my_private_key.diffie_hellman(&peer_public_key);
+
+            //debug
+            println!("RECEIVER PUBLIC KEY {:?}:", public_key_bytes);
+            println!("RECEIVER SHARED SECRET {:02x?}:", shared_secret.as_bytes());
+
+            // generate AES cipher to decrypt messages
+            let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
+            let cipher = Aes256Gcm::new(key);
+            let mut initial_nonce: [u8; 12] = [0; 12];       
+            
             let mut buffer: [u8; 512] = [0; 512];
             let mut received_file_name = String::from("file.tmp");
             let mut file = match file_rw::open_writable_file(&received_file_name) {
@@ -177,20 +306,41 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
             };
 
             loop {
-                match stream.read(&mut buffer) {
+                let num_bytes_read = match stream.read(&mut buffer) {
                     Ok(0) => {
                         // End connection
                         println!("Partner disconnected");
                         return;
                     }
-                    Ok(_) => (),
+                    Ok(n) => n,
                     Err(e) => {
                         eprintln!("Failed to read from stream: {e}");
                         break;
                     }
                 };
 
-                let received_packet = match packet::decode_packet(buffer) {
+                // decrypt
+                let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
+
+                increment_nonce(&mut initial_nonce);
+
+                let plaintext = match cipher.decrypt(&nonce, &buffer[..num_bytes_read]) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Failed to decrypt message: {e}");
+                        break;
+                    }
+                };
+
+
+
+                let mut packet_array: [u8; 512] = [0; 512];
+
+                for i in 0..512 {
+                    packet_array[i] = plaintext[i];
+                }
+
+                let received_packet = match packet::decode_packet(packet_array) {
                     Ok(p) => p,
                     Err(e) => {
                         eprintln!("Unable to decode packet: {e}");
@@ -198,10 +348,10 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
                     }
                 };
 
-                // If the file name has not been updated yet, update it
-                if received_file_name == "file.tmp" {
-                    received_file_name = received_packet.filename;
-                }
+                // // If the file name has not been updated yet, update it
+                // if received_file_name == "file.tmp" {
+                //     received_file_name = received_packet.filename;
+                // }
                 
                 let data_bytes = received_packet.data.len();
                 match file.write(&received_packet.data) {
