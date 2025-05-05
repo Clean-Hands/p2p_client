@@ -102,7 +102,7 @@ fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: [u8; 512]
             Some(cipher) => match cipher.encrypt(&nonce, message.as_ref()) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("Encryption failed: {}", e);
+                    eprintln!("Encryption failed: {e}");
                     continue; // or `return` if you want to exit entirely
                 }
             },
@@ -112,7 +112,6 @@ fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: [u8; 512]
             }
         };
         
-
         // increment nonce (in the struct itself)
         increment_nonce(&mut stream.nonce);
         
@@ -173,7 +172,7 @@ fn start_sender_thread(send_addrs: Vec<String>, port: String, file_path: String)
             }
             
             // debug
-            println!("SENDER PUBLIC KEY {:?}:", public_key_bytes);
+            println!("SENDER PUBLIC KEY: {:?}", public_key_bytes);
             if let Some(secret) = &connection.dh_shared_secret {
                 println!("SENDER SHARED SECRET: {:02x?}", secret.as_bytes());
             }
@@ -256,7 +255,7 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
 
     println!("Successfully started sender thread.");
 
-    // start handling incoming data and printing it to the terminal
+    // start handling incoming data
     for stream in listener.incoming() {
         let mut stream = match stream {
             Ok(s) => s,
@@ -287,16 +286,16 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
             let shared_secret = my_private_key.diffie_hellman(&peer_public_key);
 
             //debug
-            println!("RECEIVER PUBLIC KEY {:?}:", public_key_bytes);
-            println!("RECEIVER SHARED SECRET {:02x?}:", shared_secret.as_bytes());
+            println!("RECEIVER PUBLIC KEY: {:?}", public_key_bytes);
+            println!("RECEIVER SHARED SECRET: {:02x?}", shared_secret.as_bytes());
 
             // generate AES cipher to decrypt messages
             let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
             let cipher = Aes256Gcm::new(key);
             let mut initial_nonce: [u8; 12] = [0; 12];       
             
-            let mut buffer: [u8; 512] = [0; 512];
-            let mut received_file_name = String::from("file.tmp");
+            let mut buffer: [u8; 528] = [0; 528];
+            let received_file_name = String::from("file.tmp");
             let mut file = match file_rw::open_writable_file(&received_file_name) {
                 Ok(f) => f,
                 Err(e) => {
@@ -332,8 +331,6 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
                     }
                 };
 
-
-
                 let mut packet_array: [u8; 512] = [0; 512];
 
                 for i in 0..512 {
@@ -362,10 +359,6 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
                     },
                     Err(e) => eprintln!("Failed to write byte to file: {e}")
                 }
-            }
-
-            if let Err(e) = rename_file(&mut file, &received_file_name) {
-                eprintln!("{e}")
             }
         });
     }

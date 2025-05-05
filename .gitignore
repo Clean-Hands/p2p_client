@@ -20,5 +20,6 @@ target/
 .DS_Store
 playground/
 
-# ignore .txt files
+# ignore specific file extensions
 *.txt
+*.tmp

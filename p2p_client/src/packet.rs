@@ -18,7 +18,7 @@ use byteorder::{ByteOrder, BigEndian};
 #[derive(Default, Debug, PartialEq)]
 pub struct Packet {
     pub data_length: u16,
-    pub data: Vec<u8>,
+    pub data: Vec<u8>, // up to 478 bytes
     pub chunk_hash: [u8; 32],
 }
 
