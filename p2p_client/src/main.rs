@@ -32,6 +32,17 @@ mod file_rw;
     nonce: [u8; 12]
 }
 
+/// encrypt message given nonce, cipher, and message
+fn encrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, message: &[u8; packet::PACKET_SIZE]) -> Result<Vec<u8>, String> {
+    match cipher.encrypt(&nonce, message.as_ref()) {
+        Ok(c) => {return Ok(c)}
+        Err(e) => {
+            return Err(format!("Encryption failed: {}", e));
+
+        }
+    }; 
+}
+
 // TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
 // should probably be incrementing a bit a time, not a byte
 /// increment the nonce within the struct
@@ -96,17 +107,14 @@ fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: [u8; pack
 
         // encrypt message
         let nonce = Nonce::from_slice(&stream.nonce);
-        let ciphertext = match stream.cipher.as_ref() {
-            Some(cipher) => match cipher.encrypt(&nonce, message.as_ref()) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("Encryption failed: {e}");
-                    continue; // or `return` if you want to exit entirely
-                }
-            },
-            None => {
-                eprintln!("Failed to initialize cipher");
-                continue; // or `return`
+        // this function call assumes that cipher is Some type, still need to check that cipher
+        // is initialized correctly in start_sender_task
+        let ciphertext = match encrypt_message(&nonce, stream.cipher.as_ref().unwrap(), &message) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Encryption failed: {e}");
+                continue; // don't think continue is the correct action here. How do we want to handle 
+                          // an encryption fail?
             }
         };
         
@@ -230,6 +238,8 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
     let cipher = Aes256Gcm::new(key);
     let mut initial_nonce: [u8; 12] = [0; 12];       
     
+    // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so 
+    // buffer needs to be PACKET_SIZE + 16 bytes in size
     let mut buffer: [u8; 528] = [0; 528];
     let mut file = match file_rw::open_writable_file(&String::from("file.tmp")) {
         Ok(f) => f,
