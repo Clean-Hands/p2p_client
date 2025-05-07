@@ -1,10 +1,12 @@
 //! file_rw.rs
 //! by Lazuli Kleinhans, Ruben Boero
-//! April 29th, 2025
+//! May 6th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
 use std::io::{self, Read, Bytes};
+
+#[allow(dead_code)]
 
 
 /// Return a `Vec<u8>` filled with ALL of the bytes of the passed filename
