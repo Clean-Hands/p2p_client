@@ -1,6 +1,6 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! May 5th, 2025
+//! May 6th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
@@ -90,7 +90,7 @@ fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 /// let message = String::from("Hello, world!");
 /// send_to_all_connections(&streams, message);
 /// ```
-fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: [u8; 512]) {
+fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: [u8; packet::PACKET_SIZE]) {
 
     for stream in streams {
 
@@ -185,8 +185,9 @@ async fn start_sender_task(send_addrs: Vec<String>, port: String, file_path: Str
     // write packets until EOF 
     loop {
         let mut write_bytes: Vec<u8> = vec![];
-        // a packet can hold up to 478 bytes of data
-        for _ in 0..478 {
+        // subtract 2 for the data_length bytes
+        let max_bytes = packet::PACKET_SIZE - 2;
+        for _ in 0..max_bytes {
             match file_bytes.next() {
                 Some(Ok(b)) => write_bytes.push(b),
                 Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
@@ -263,9 +264,9 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
             }
         };
 
-        // convert the plaintext Vec into an array 
-        let mut packet_array: [u8; 512] = [0; 512];
-        for i in 0..512 {
+        // convert the plaintext Vec into an array
+        let mut packet_array: [u8; packet::PACKET_SIZE] = [0; packet::PACKET_SIZE];
+        for i in 0..packet::PACKET_SIZE {
             packet_array[i] = plaintext[i];
         }
 
@@ -346,11 +347,11 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
 
 fn main() {
 
-    // put all the command line arguments into a vector
+    // put all the command line arguments into a Vec
     let args: Vec<String> = args().collect();
     if args.len() < 4 {
         eprintln!("Please specify a file path, port number, and any number of IP addresses to connect to.\nUsage: cargo run [file path] [port number] [IP address ...]");
-        process::exit(1);  // exit with error code 1 (common failure)
+        process::exit(1);
     }
 
     run_client_server(&args[3..], args[2].clone(), args[1].clone());

@@ -1,13 +1,13 @@
 //! packet.rs
 //! by Ruben Boero, Liam Keane, Lazuli Kleinhans
-//! April 29th, 2025
+//! May 6th, 2025
 //! CS347 Advanced Software Design
 
 use std::mem;
 use sha2::{Sha256, Digest};
 use byteorder::{ByteOrder, BigEndian};
 
-const PACKET_SIZE: usize = 512;
+pub const PACKET_SIZE: usize = 512;
 
 /// Packet struct to contain relevant items of our packet protocol 
 /// 
@@ -17,11 +17,11 @@ const PACKET_SIZE: usize = 512;
 #[derive(Default, Debug, PartialEq)]
 pub struct Packet {
     pub data_length: u16,
-    pub data: Vec<u8>, // up to 510 bytes
+    pub data: Vec<u8>, // up to PACKET_SIZE-2 (510) bytes
 }
 
 /// given a vector of bytes, compute and return the sha256 hash 
-pub fn compute_sha256_hash(data: &Vec<u8>) -> [u8; 32]{
+pub fn compute_sha256_hash(data: &Vec<u8>) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(&data[..]);
 
@@ -46,7 +46,7 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 
     // check for malformed packet
     if data_len > PACKET_SIZE as u16 {
-        return Err(format!("Data length of '{}' is larger than maximum packet size of '{}'", data_len, PACKET_SIZE));
+        return Err(format!("Data length of '{data_len}' is larger than maximum packet size of '{PACKET_SIZE}'"));
     }
 
     packet.data_length = data_len;
@@ -56,7 +56,7 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
     let file_data_len = data_len - mem::size_of::<u16>() as u16;
     packet.data = packet_bytes[offset..offset + file_data_len as usize].to_vec();
 
-    Ok(packet) // return the completed packet
+    Ok(packet) // return the decoded packet
 }
 
 /// wrap data in our packet protocol
@@ -78,7 +78,7 @@ pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
     // append data
     packet[offset..offset + data.len()].copy_from_slice(&data);
     
-    return packet;
+    packet // return the encoded packet
 }
 
 #[cfg(test)]
