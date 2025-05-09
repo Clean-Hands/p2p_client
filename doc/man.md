@@ -27,7 +27,7 @@ subcommands:
 * Ping known IPs to find which are online/listening  
   * —-ping or \-p  
 * Request available files from given IP  
-  * —-request\_files \[IP\]  
+  * —-request\_file \[IP\]  
   * \-rf \[IP\]  
 * Start a listening process  
   * —-listener  
