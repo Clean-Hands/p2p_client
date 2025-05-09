@@ -21,16 +21,12 @@ pub struct Packet {
 }
 
 /// given a vector of bytes, compute and return the sha256 hash 
-pub fn compute_sha256_hash(data: &Vec<u8>) -> [u8; 32] {
+pub fn compute_sha256_hash(data: &Vec<u8>) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(&data[..]);
 
     // read hash digest and consume hasher
-    let chunk_hash = hasher.finalize();
-    let mut output: [u8; 32] = [0; 32];
-    output.copy_from_slice(&chunk_hash);
-
-    output  // return hash
+    return hasher.finalize().to_vec();
 }
 
 /// extract data from packet
@@ -64,6 +60,7 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 /// input data: bytes that represent the chunk of the file being sent
 /// 
 /// output: array of bytes to send
+// TODO: check that data doesn't exceed 510 bytes
 pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
     // initialize packet array and offset
     let mut packet: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
