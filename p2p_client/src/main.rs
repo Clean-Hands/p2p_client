@@ -35,7 +35,7 @@ mod file_rw;
 /// encrypt message given nonce, cipher, and message
 fn encrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, message: &[u8; packet::PACKET_SIZE]) -> Result<Vec<u8>, String> {
     match cipher.encrypt(&nonce, message.as_ref()) {
-        Ok(c) => {return Ok(c)}
+        Ok(c) => return Ok(c),
         Err(e) => {
             return Err(format!("Encryption failed: {}", e));
 
@@ -43,8 +43,20 @@ fn encrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, message: &
     }; 
 }
 
+/// decrypt message given nonce, cipher, and ciphertext
+/// 
+/// ciphertext is assumed to be 528 bytes because packet is 512 + 16 
+/// byte verification tag added by Aes246Gcm
+fn decrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, ciphertext: &[u8; packet::PACKET_SIZE + 16]) -> Result<Vec<u8>, String> {
+    match cipher.decrypt(&nonce, ciphertext.as_ref()) {
+        Ok(plaintext) => return Ok(plaintext),
+        Err(e) => {
+            return Err(format!("Decryption failed {}", e));
+        }
+    }
+}
+
 // TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
-// should probably be incrementing a bit a time, not a byte
 /// increment the nonce within the struct
 fn increment_nonce(nonce: &mut [u8; 12]) {
     let mut carry = true;
@@ -250,7 +262,7 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
     };
 
     loop {
-        let num_bytes_read = match stream.read(&mut buffer) {
+        match stream.read(&mut buffer) {
             Ok(0) => {
                 // End connection
                 println!("Peer {} disconnected", stream.peer_addr().unwrap());
@@ -265,14 +277,16 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
 
         // decrypt
         let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
-        increment_nonce(&mut initial_nonce);
-        let plaintext = match cipher.decrypt(&nonce, &buffer[..num_bytes_read]) {
+
+        let plaintext = match decrypt_message(&nonce, &cipher, &buffer) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("Failed to decrypt message: {e}");
-                return;
+                eprintln!("Failed to decrypt ciphertext: {e}");
+                return;                
             }
         };
+        
+        increment_nonce(&mut initial_nonce);
 
         // convert the plaintext Vec into an array
         let mut packet_array: [u8; packet::PACKET_SIZE] = [0; packet::PACKET_SIZE];
