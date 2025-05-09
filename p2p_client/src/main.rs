@@ -9,7 +9,9 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::env::args;
 use std::process;
+use std::path::PathBuf;
 use tokio::runtime::Runtime;
+use clap::Parser;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
 use aes_gcm::{
@@ -22,6 +24,17 @@ mod file_rw;
 // Oliver advice:
 // 1. use clap for creating CLI
 // 2. consider using enum for private key and shared secret (nothing stored/Secret stored)
+
+#[derive(Parser)]
+#[command(name = "p2p_client")]
+// #[command(version = "0.1.0")]
+#[command(about = "Send a file from one peer to another", long_about = None)]
+struct Cli {
+    send_file: Option<PathBuf>,
+    save_path: Option<PathBuf>,
+    port: String,
+    addrs: Vec<String>
+}
 
  struct ConnectionInfo {
     sender_stream: TcpStream,
@@ -131,7 +144,7 @@ fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: [u8; pack
 /// let file_path = String::from("test.txt");
 /// start_sender_task(send_addrs, port, file_path);
 /// ```
-async fn start_sender_task(send_addrs: Vec<String>, port: String, file_path: String) {
+async fn start_sender_task(send_addrs: Vec<String>, port: String, file_path: PathBuf) {
     // start a sender stream for every IP the user wants to talk to
     let mut senders: Vec<ConnectionInfo> = vec![];
     for addr in &send_addrs {
@@ -157,7 +170,7 @@ async fn start_sender_task(send_addrs: Vec<String>, port: String, file_path: Str
         }
 
         // wait for public key response from listener
-        let mut public_key_bytes = [0u8; 32];
+        let mut public_key_bytes: [u8; 32] = [0; 32];
         connection.sender_stream.read_exact(&mut public_key_bytes).expect("Failed to read peer's public key");
         let peer_public_key = PublicKey::from(public_key_bytes);
 
@@ -206,8 +219,8 @@ async fn start_sender_task(send_addrs: Vec<String>, port: String, file_path: Str
 }
 
 
-async fn handle_incoming_connection(mut stream: TcpStream) {
-
+/// Takes a stream opened by a TcpListener, performs Diffie-Hellman handshake and handles incoming packets
+async fn handle_incoming_connection(mut stream: TcpStream, mut save_path: PathBuf) {
     println!("Received incoming connection from {}", stream.peer_addr().unwrap());
     // generate DH exchange info
     let local_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
@@ -218,7 +231,7 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
     stream.read_exact(&mut peer_public_key_bytes).expect("Failed to read peer's public key");
     let peer_public_key = PublicKey::from(peer_public_key_bytes);
 
-    // send our public key to peer
+    // send local public key to peer
     if let Err(e) = stream.write_all(local_public_key.as_bytes()) {
         eprintln!("Failed to send local public key: {e}");
         return;
@@ -230,8 +243,9 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
     let cipher = Aes256Gcm::new(key);
     let mut initial_nonce: [u8; 12] = [0; 12];       
     
-    let mut buffer: [u8; 528] = [0; 528];
-    let mut file = match file_rw::open_writable_file(&String::from("file.tmp")) {
+    let mut buffer = [0u8; packet::PACKET_SIZE+16];
+    save_path.push("file.tmp");
+    let mut file = match file_rw::open_writable_file(&save_path) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("{e}");
@@ -239,6 +253,7 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
         }
     };
 
+    // read bytes until peer disconnects
     loop {
         let num_bytes_read = match stream.read(&mut buffer) {
             Ok(0) => {
@@ -265,7 +280,7 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
         };
 
         // convert the plaintext Vec into an array
-        let mut packet_array: [u8; packet::PACKET_SIZE] = [0; packet::PACKET_SIZE];
+        let mut packet_array = [0u8; packet::PACKET_SIZE];
         for i in 0..packet::PACKET_SIZE {
             packet_array[i] = plaintext[i];
         }
@@ -291,7 +306,7 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
 }
 
 
-/// Starts listening on `0.0.0.0:[port]` for incoming connections and starts a thread to send to each `addr` in `send_addrs` on `[addr]:[port]`.
+/// Starts listening on `0.0.0.0:[port]` for incoming connections and spawns a task to send to each `addr` in `send_addrs` on `[addr]:[port]`.
 /// 
 /// # Example
 /// 
@@ -299,11 +314,11 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
 /// let args: Vec<String> = args().collect();
 /// run_client_server(&args[3..], args[2].clone(), args[1].clone());
 /// ```
-fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
+fn run_client_server(send_addrs: Vec<String>, port: String, send_file: Option<PathBuf>, save_path: Option<PathBuf>) {
 
     // Create and enter a new async runtime
-    let rt = Runtime::new().expect("Failed to create a runtime");
-    let _ = rt.enter();
+    let runtime = Runtime::new().expect("Failed to create a runtime");
+    let _ = runtime.enter();
     
     println!("Starting listener...");
     let listen_addr = String::from("0.0.0.0:") + &port;
@@ -318,16 +333,12 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
         }
     };
     println!("Successfully started listener");
-
-    println!("Starting sender task...");
-    let mut send_addrs_clone: Vec<String> = vec![];
-    for addr in send_addrs {
-        send_addrs_clone.push(addr.clone());
+ 
+    if let Some(f) = send_file {
+        println!("Starting sender task...");
+        runtime.spawn(start_sender_task(send_addrs, port, f));
+        println!("Successfully started sender task");
     }
-
-    rt.spawn(start_sender_task(send_addrs_clone, port, file_path));
-
-    println!("Successfully started sender task");
 
     // start handling incoming connections
     for stream in listener.incoming() {
@@ -340,7 +351,7 @@ fn run_client_server(send_addrs: &[String], port: String, file_path: String) {
         };
     
         // spawn a new task for each incoming stream to handle more than one connection
-        rt.spawn(handle_incoming_connection(stream));
+        runtime.spawn(handle_incoming_connection(stream, save_path.clone()));
     }
 }
 
@@ -354,5 +365,7 @@ fn main() {
         process::exit(1);
     }
 
-    run_client_server(&args[3..], args[2].clone(), args[1].clone());
+    let cli = Cli::parse();
+
+    run_client_server(cli.addrs, cli.port, cli.send_file, cli.save_path);
 }
