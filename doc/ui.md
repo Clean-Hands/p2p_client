@@ -7,7 +7,7 @@
 * Add protocol to enable downloaders to request a specific file  
 * Ideally indicate to the uploader if there is a download active so they don’t quit while the download is active  
   * Maybe when the user goes to exit, if there is a download happening, warn them, and make them confirm  
-  * `in_progress` subcommand?
+  * in\_progress subcommand?
 
 *We have 2 ideas for what our application should look like. We are leaning towards idea 1 as it seems simpler without sacrificing much usability for our target audience, but we would like your feedback.*
 
@@ -18,7 +18,7 @@
 * Subcommand to request available files from user or list of users  
   * Idea is that this command will be run first so that users can then start a requester process for a file/list of files  
 * Ability to add files to the list of available files for users to download  
-  * `add schoolwork/textbook.pdf`  
+  * add schoolwork/textbook.pdf  
 * Upon startup, ping all IPs in the list of addresses to see who is online and who isn’t  
   * Also have a ping subcommand
 
