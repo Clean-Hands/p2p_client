@@ -356,3 +356,26 @@ fn main() {
 
     run_client_server(&args[3..], args[2].clone(), args[1].clone());
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_increment_nonce() {
+        let mut nonce = [0u8; 12];
+        increment_nonce(&mut nonce);
+        assert_eq!(nonce, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+
+        let mut nonce = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255];
+        increment_nonce(&mut nonce);
+        assert_eq!(nonce, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]);
+
+        let mut nonce = [0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255];
+        increment_nonce(&mut nonce);
+        assert_eq!(nonce, [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]);
+
+        let mut nonce = [255u8; 12];
+        increment_nonce(&mut nonce);
+        assert_eq!(nonce, [0u8; 12]);
+    }
+}
