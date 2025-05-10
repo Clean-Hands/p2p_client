@@ -366,8 +366,10 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
                     }
                 };
                 let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
-
-                assert_eq!(computed_file_hash, file_hash);
+                
+                if computed_file_hash != file_hash {
+                    eprintln!("Failed to verify file hash. File not received correctly.")
+                }
 
                 return;
             }
