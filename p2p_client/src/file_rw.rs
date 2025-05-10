@@ -5,9 +5,7 @@
 
 use std::fs::{self, File};
 use std::io::{self, Read, Bytes};
-
-#[allow(dead_code)]
-
+use std::path::PathBuf;
 
 /// Return a `Vec<u8>` filled with ALL of the bytes of the passed filename
 /// 
@@ -21,7 +19,8 @@ use std::io::{self, Read, Bytes};
 ///     Err(e) => eprintln!("{e}")
 /// };
 /// ```
-pub fn read_file_bytes(file_path: &String) -> Result<Vec<u8>, String> {
+#[allow(dead_code)]
+pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
     match fs::read(file_path) {
         Ok(d) => Ok(d),
         Err(e) => {
@@ -51,7 +50,7 @@ pub fn read_file_bytes(file_path: &String) -> Result<Vec<u8>, String> {
 ///     }
 /// }
 /// ```
-pub fn open_iterable_file(file_path: &String) -> Result<Bytes<File>, String> {
+pub fn open_iterable_file(file_path: &PathBuf) -> Result<Bytes<File>, String> {
     let f = match File::open(file_path) {
         Ok(f) => f,
         Err(e) => {
@@ -73,7 +72,9 @@ pub fn open_iterable_file(file_path: &String) -> Result<Bytes<File>, String> {
 ///     eprintln!("{e}")
 /// }
 /// ```
-pub fn write_file_bytes(file_path: &String, bytes: &Vec<u8>) -> Result<(), String>{
+/// 
+#[allow(dead_code)]
+pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), String>{
     match fs::write(file_path, bytes) {
         Ok(_) => Ok(()),
         Err(e) => {
@@ -105,7 +106,7 @@ pub fn write_file_bytes(file_path: &String, bytes: &Vec<u8>) -> Result<(), Strin
 ///     }
 /// }
 /// ```
-pub fn open_writable_file(file_path: &String) -> Result<File, String> {
+pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
     match File::create(file_path) {
         Ok(f) => Ok(f),
         Err(e) => return Err(format!("Couldn't open file: {e}"))
@@ -114,7 +115,8 @@ pub fn open_writable_file(file_path: &String) -> Result<File, String> {
 
 
 
-pub fn rename_file(file: &mut File, new_filename: &String) -> Result<File, String> {
+#[allow(dead_code)]
+pub fn rename_file(file: &mut File, new_filename: &PathBuf) -> Result<File, String> {
     let mut new_file = match open_writable_file(new_filename) {
         Ok(f) => f,
         Err(e) => return Err(format!("Failed to create new file to copy data into: {e}"))
@@ -137,14 +139,14 @@ mod tests {
     use super::*;
     #[test]
     fn test_read_write_file_bytes() {
-        let test_filename = "test_read_write_file.txt".to_string();
+        let test_filename = PathBuf::from("test_read_write_file.txt");
 
         let expected_data = vec![104, 101, 108, 108, 111]; // "hello"
         if let Err(e) = write_file_bytes(&test_filename, &expected_data) {
             panic!("{e}")
         }
 
-        let actual_data = read_file_bytes(&test_filename.to_string());
+        let actual_data = read_file_bytes(&test_filename);
 
         assert_eq!(actual_data, Ok(expected_data));
  
@@ -155,7 +157,8 @@ mod tests {
 
     #[test]
     fn test_open_iterable_file_and_read_correct_bytes() {
-        let test_filename = "test_open_iterable_file.txt".to_string();
+        // let test_filename = "test_open_iterable_file.txt".to_string();
+        let test_filename = PathBuf::from("test_open_iterable_file.txt");
         let expected_data = b"Ruben said Lazuli was here :)".to_vec();
         
         if let Err(e) = write_file_bytes(&test_filename, &expected_data) {
@@ -185,7 +188,7 @@ mod tests {
     fn test_open_writable_file_and_write_bytes() {
         use std::io::Write;
 
-        let test_filename = "test_open_writable_file.txt".to_string();
+        let test_filename = PathBuf::from("test_open_writable_file.txt");
         let to_write1 = b"partial write test ".to_vec();
         let to_write2 = b"partial write test part 2 electric boogaloo".to_vec();
         let mut expected_data = to_write1.clone();
@@ -211,8 +214,8 @@ mod tests {
 
     #[test]
     fn test_read_from_nonexistent_file() {
-        let nonexistent_file = "i_dont_exist.txt";
-        if let Ok(d) = read_file_bytes(&nonexistent_file.to_string()) {  
+        let nonexistent_file = PathBuf::from("i_dont_exist.txt");
+        if let Ok(d) = read_file_bytes(&nonexistent_file) {  
             panic!("Was able to read data from nonexistent file: {:?}", d);
         };
     }
@@ -222,7 +225,7 @@ mod tests {
     fn test_write_to_nonexistent_dir() {
         use std::path::Path;
 
-        let nonexistent_path = "nonexistent_dir/neither_do_i.txt".to_string();
+        let nonexistent_path = PathBuf::from("nonexistent_dir/neither_do_i.txt");
         let to_write = b"i will never be written to a file bc of the bad path".to_vec();
 
         if let Ok(()) = write_file_bytes(&nonexistent_path, &to_write) {  
