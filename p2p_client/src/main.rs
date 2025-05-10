@@ -32,8 +32,87 @@ mod file_rw;
     nonce: [u8; 12]
 }
 
+/// encrypt message given nonce, cipher, and message
+fn encrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, message: &[u8; packet::PACKET_SIZE]) -> Result<Vec<u8>, String> {
+    match cipher.encrypt(&nonce, message.as_ref()) {
+        Ok(c) => return Ok(c),
+        Err(e) => {
+            return Err(format!("Encryption failed: {}", e));
+
+        }
+    }; 
+}
+
+/// decrypt message given nonce, cipher, and ciphertext
+/// 
+/// ciphertext is assumed to be 528 bytes because packet is always 512 bytes long & Aes256Gcm adds a 16 
+/// byte verification tag
+fn decrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, ciphertext: &[u8; packet::PACKET_SIZE + 16]) -> Result<[u8; 512], String> {
+    match cipher.decrypt(&nonce, ciphertext.as_ref()) {
+        Ok(plaintext) => {
+            // convert output of decrypt from vec to array so it plays nicely with decode function
+            let mut plaintext_as_array = [0; packet::PACKET_SIZE];
+            for i in 0..packet::PACKET_SIZE {
+                plaintext_as_array[i] = plaintext[i];
+            }
+            return Ok(plaintext_as_array)
+        },
+        Err(e) => {
+            return Err(format!("Decryption failed {}", e));
+        }
+    }
+}
+
+
+/// receives file name and file hash from the sender
+fn listen_for_filename_and_filehash(initial_nonce: &mut [u8; 12], mut stream: &TcpStream, cipher: &Aes256Gcm) -> Result<(String, Vec<u8>), String> {
+    // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so   
+    // buffer needs to be PACKET_SIZE + 16 bytes in size
+    let mut buffer: [u8; 528] = [0; 528];
+    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
+    
+    // listen for filename
+    if let Err(e) = stream.read(&mut buffer) {
+        return Err(format!("Failed to read from stream: {e}"));
+    }
+
+    let file_path = match decrypt_message(&nonce, &cipher, &buffer) {
+        Ok(fp) => fp,
+        Err(e) => {
+            return Err(format!("Failed to decrypt ciphertext: {e}"));            
+        }
+    };
+
+    let file_path = packet::decode_packet(file_path);
+    let file_name_packet = file_path.unwrap();
+    let file_path = String::from_utf8_lossy(file_name_packet.data.as_slice());
+
+    increment_nonce(initial_nonce);
+    
+    // listen for the filehash
+    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
+
+    if let Err(e) = stream.read(&mut buffer) {
+        return Err(format!("Failed to read from stream: {e}"));
+    }
+
+    let file_hash = match decrypt_message(&nonce, &cipher, &buffer) {
+        Ok(fh) => fh,
+        Err(e) => {
+            return Err(format!("Failed to decrypt ciphertext: {e}"));             
+        }
+    };
+
+    let file_hash = packet::decode_packet(file_hash);
+    let file_hash_packet = file_hash.unwrap();
+    let file_hash = file_hash_packet.data.as_slice();
+
+    increment_nonce(initial_nonce);
+
+    return Ok((String::from(file_path), file_hash.to_vec()));
+}
+
 // TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
-// should probably be incrementing a bit a time, not a byte
 /// increment the nonce within the struct
 fn increment_nonce(nonce: &mut [u8; 12]) {
     let mut carry = true;
@@ -93,20 +172,16 @@ fn connect_sender_stream(send_ip: &String, port: &String) -> TcpStream {
 fn send_to_all_connections(streams: &mut Vec<ConnectionInfo>, message: [u8; packet::PACKET_SIZE]) {
 
     for stream in streams {
-
         // encrypt message
         let nonce = Nonce::from_slice(&stream.nonce);
-        let ciphertext = match stream.cipher.as_ref() {
-            Some(cipher) => match cipher.encrypt(&nonce, message.as_ref()) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("Encryption failed: {e}");
-                    continue; // or `return` if you want to exit entirely
-                }
-            },
-            None => {
-                eprintln!("Failed to initialize cipher");
-                continue; // or `return`
+        // this function call assumes that cipher is Some type, still need to check that cipher
+        // is initialized correctly in start_sender_task
+        let ciphertext = match encrypt_message(&nonce, stream.cipher.as_ref().unwrap(), &message) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Encryption failed: {e}");
+                continue; // don't think continue is the correct action here. How do we want to handle 
+                          // an encryption fail?
             }
         };
         
@@ -174,6 +249,23 @@ async fn start_sender_task(send_addrs: Vec<String>, port: String, file_path: Str
         }
     }
 
+    // send filename and file hash
+    // TODO: currently sending file path bc we don't know how to get filename
+    let file_path_packet = packet::encode_packet(file_path.clone().into_bytes());
+    send_to_all_connections(&mut senders, file_path_packet);
+
+    let hash_bytes = match file_rw::read_file_bytes(&file_path) {
+        Ok(hb) => hb,
+        Err(e) => {
+            eprintln!("{e}");
+            return;
+        }
+    };
+    let file_hash_data = packet::compute_sha256_hash(&hash_bytes);
+    let file_hash_packet = packet::encode_packet(file_hash_data);
+    send_to_all_connections(&mut senders, file_hash_packet);
+
+    // read file
     let mut file_bytes = match file_rw::open_iterable_file(&file_path) {
         Ok(b) => b,
         Err(e) => {
@@ -228,9 +320,25 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
     let shared_secret = local_private_key.diffie_hellman(&peer_public_key);
     let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
-    let mut initial_nonce: [u8; 12] = [0; 12];       
+    let mut initial_nonce: [u8; 12] = [0; 12];    
     
+    // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so   
+    // buffer needs to be PACKET_SIZE + 16 bytes in size
     let mut buffer: [u8; 528] = [0; 528];
+
+    let filename_and_filehash = match listen_for_filename_and_filehash(&mut initial_nonce, &stream, &cipher) {
+        Ok(output) => output,
+        Err(e) => {
+            eprintln!("{e}");
+            return;
+        }
+    };
+    let file_name = filename_and_filehash.0;
+    let file_hash = filename_and_filehash.1;
+    println!("FILE NAME: {}", file_name);
+    println!("FILE HASH: {:?}", file_hash);
+    
+    // read file
     let mut file = match file_rw::open_writable_file(&String::from("file.tmp")) {
         Ok(f) => f,
         Err(e) => {
@@ -240,13 +348,32 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
     };
 
     loop {
-        let num_bytes_read = match stream.read(&mut buffer) {
+        match stream.read(&mut buffer) {
             Ok(0) => {
                 // End connection
                 println!("Peer {} disconnected", stream.peer_addr().unwrap());
+
+                // verify file hash is correct
+                if let Err(e) = file.sync_all() {
+                    eprintln!("Failed to ensure all data written to file: {e}");
+                }
+
+                let hash_bytes = match file_rw::read_file_bytes(&String::from("file.tmp")) {
+                    Ok(hb) => hb,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        return;
+                    }
+                };
+                let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
+                
+                if computed_file_hash != file_hash {
+                    eprintln!("Failed to verify file hash. File not received correctly.")
+                }
+
                 return;
             }
-            Ok(n) => n,
+            Ok(_) => (),
             Err(e) => {
                 eprintln!("Failed to read from stream: {e}");
                 return;
@@ -255,22 +382,18 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
 
         // decrypt
         let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
-        increment_nonce(&mut initial_nonce);
-        let plaintext = match cipher.decrypt(&nonce, &buffer[..num_bytes_read]) {
+        
+        let plaintext = match decrypt_message(&nonce, &cipher, &buffer) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("Failed to decrypt message: {e}");
-                return;
+                eprintln!("Failed to decrypt ciphertext: {e}");
+                return;                
             }
         };
+        
+        increment_nonce(&mut initial_nonce);
 
-        // convert the plaintext Vec into an array
-        let mut packet_array: [u8; packet::PACKET_SIZE] = [0; packet::PACKET_SIZE];
-        for i in 0..packet::PACKET_SIZE {
-            packet_array[i] = plaintext[i];
-        }
-
-        let received_packet = match packet::decode_packet(packet_array) {
+        let received_packet = match packet::decode_packet(plaintext) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("Unable to decode packet: {e}");
