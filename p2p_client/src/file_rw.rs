@@ -7,9 +7,6 @@ use std::fs::{self, File};
 use std::io::{self, Read, Bytes};
 use std::path::PathBuf;
 
-#[allow(dead_code)]
-
-
 /// Return a `Vec<u8>` filled with ALL of the bytes of the passed filename
 /// 
 /// If you don't want to read in all of the bytes at once, consider using `open_iterable_file()`
@@ -22,6 +19,7 @@ use std::path::PathBuf;
 ///     Err(e) => eprintln!("{e}")
 /// };
 /// ```
+#[allow(dead_code)]
 pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
     match fs::read(file_path) {
         Ok(d) => Ok(d),
@@ -74,6 +72,8 @@ pub fn open_iterable_file(file_path: &PathBuf) -> Result<Bytes<File>, String> {
 ///     eprintln!("{e}")
 /// }
 /// ```
+/// 
+#[allow(dead_code)]
 pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), String>{
     match fs::write(file_path, bytes) {
         Ok(_) => Ok(()),
@@ -115,6 +115,7 @@ pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
 
 
 
+#[allow(dead_code)]
 pub fn rename_file(file: &mut File, new_filename: &PathBuf) -> Result<File, String> {
     let mut new_file = match open_writable_file(new_filename) {
         Ok(f) => f,
