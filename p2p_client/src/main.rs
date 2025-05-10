@@ -9,7 +9,6 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::env::args;
 use std::process;
-use packet::encode_packet;
 use tokio::runtime::Runtime;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
@@ -48,9 +47,16 @@ fn encrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, message: &
 /// 
 /// ciphertext is assumed to be 528 bytes because packet is always 512 bytes long & Aes256Gcm adds a 16 
 /// byte verification tag
-fn decrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, ciphertext: &[u8; packet::PACKET_SIZE + 16]) -> Result<Vec<u8>, String> {
+fn decrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, ciphertext: &[u8; packet::PACKET_SIZE + 16]) -> Result<[u8; 512], String> {
     match cipher.decrypt(&nonce, ciphertext.as_ref()) {
-        Ok(plaintext) => return Ok(plaintext),
+        Ok(plaintext) => {
+            // convert output of decrypt from vec to array so it plays nicely with decode function
+            let mut plaintext_as_array = [0; packet::PACKET_SIZE];
+            for i in 0..packet::PACKET_SIZE {
+                plaintext_as_array[i] = plaintext[i];
+            }
+            return Ok(plaintext_as_array)
+        },
         Err(e) => {
             return Err(format!("Decryption failed {}", e));
         }
@@ -77,12 +83,7 @@ fn listen_for_filename_and_filehash(initial_nonce: &mut [u8; 12], mut stream: &T
         }
     };
 
-    // convert the plaintext Vec into an array
-    let mut file_name_packet_array: [u8; packet::PACKET_SIZE] = [0; packet::PACKET_SIZE];
-    for i in 0..packet::PACKET_SIZE {
-        file_name_packet_array[i] = file_path[i];
-    }
-    let file_path = packet::decode_packet(file_name_packet_array);
+    let file_path = packet::decode_packet(file_path);
     let file_name_packet = file_path.unwrap();
     let file_path = String::from_utf8_lossy(file_name_packet.data.as_slice());
 
@@ -102,12 +103,7 @@ fn listen_for_filename_and_filehash(initial_nonce: &mut [u8; 12], mut stream: &T
         }
     };
 
-    // convert the plaintext Vec into an array
-    let mut file_hash_packet_array: [u8; packet::PACKET_SIZE] = [0; packet::PACKET_SIZE];
-    for i in 0..packet::PACKET_SIZE {
-        file_hash_packet_array[i] = file_hash[i];
-    }
-    let file_hash = packet::decode_packet(file_hash_packet_array);
+    let file_hash = packet::decode_packet(file_hash);
     let file_hash_packet = file_hash.unwrap();
     let file_hash = file_hash_packet.data.as_slice();
 
@@ -255,7 +251,7 @@ async fn start_sender_task(send_addrs: Vec<String>, port: String, file_path: Str
 
     // send filename and file hash
     // TODO: currently sending file path bc we don't know how to get filename
-    let file_path_packet = encode_packet(file_path.clone().into_bytes());
+    let file_path_packet = packet::encode_packet(file_path.clone().into_bytes());
     send_to_all_connections(&mut senders, file_path_packet);
 
     let hash_bytes = match file_rw::read_file_bytes(&file_path) {
@@ -266,7 +262,7 @@ async fn start_sender_task(send_addrs: Vec<String>, port: String, file_path: Str
         }
     };
     let file_hash_data = packet::compute_sha256_hash(&hash_bytes);
-    let file_hash_packet = encode_packet(file_hash_data);
+    let file_hash_packet = packet::encode_packet(file_hash_data);
     send_to_all_connections(&mut senders, file_hash_packet);
 
     // read file
@@ -356,6 +352,23 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
             Ok(0) => {
                 // End connection
                 println!("Peer {} disconnected", stream.peer_addr().unwrap());
+
+                // verify file hash is correct
+                if let Err(e) = file.sync_all() {
+                    eprintln!("Failed to ensure all data written to file: {e}");
+                }
+
+                let hash_bytes = match file_rw::read_file_bytes(&String::from("file.tmp")) {
+                    Ok(hb) => hb,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        return;
+                    }
+                };
+                let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
+
+                assert_eq!(computed_file_hash, file_hash);
+
                 return;
             }
             Ok(_) => (),
@@ -378,13 +391,7 @@ async fn handle_incoming_connection(mut stream: TcpStream) {
         
         increment_nonce(&mut initial_nonce);
 
-        // convert the plaintext Vec into an array
-        let mut packet_array: [u8; packet::PACKET_SIZE] = [0; packet::PACKET_SIZE];
-        for i in 0..packet::PACKET_SIZE {
-            packet_array[i] = plaintext[i];
-        }
-
-        let received_packet = match packet::decode_packet(packet_array) {
+        let received_packet = match packet::decode_packet(plaintext) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("Unable to decode packet: {e}");
