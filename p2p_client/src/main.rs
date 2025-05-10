@@ -9,7 +9,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
-use clap::{Parser, ArgGroup};
+use clap::Parser;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
 use aes_gcm::{
