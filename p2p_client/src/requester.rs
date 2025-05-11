@@ -138,7 +138,7 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
             Ok(p) => p,
             Err(e) => {
                 eprintln!("Failed to decrypt ciphertext: {e}");
-                return;                
+                return;
             }
         };
         
@@ -198,7 +198,7 @@ pub fn request_file(addr: String, hash: String, mut file_path: PathBuf) {
 
     let mut stream = connect_stream(addr);
 
-    println!("Connecting to {}", stream.peer_addr().unwrap());
+    // println!("Connecting to {}", stream.peer_addr().unwrap());
     // generate DH exchange info
     let local_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
     let local_public_key = PublicKey::from(&local_private_key);
@@ -224,19 +224,19 @@ pub fn request_file(addr: String, hash: String, mut file_path: PathBuf) {
 
     
     // receive the filename from sender
-    let filename_and_filehash = match listen_for_filename_and_filehash(&cipher, &mut initial_nonce, &stream) {
-        Ok(output) => output,
-        Err(e) => {
-            eprintln!("{e}");
-            return;
-        }
-    };
-    let file_name = filename_and_filehash.0;
-    let file_hash = filename_and_filehash.1;
-    println!("FILE NAME: {}", file_name);
-    println!("FILE HASH: {:?}", file_hash);
+    // let filename_and_filehash = match listen_for_filename_and_filehash(&cipher, &mut initial_nonce, &stream) {
+    //     Ok(output) => output,
+    //     Err(e) => {
+    //         eprintln!("{e}");
+    //         return;
+    //     }
+    // };
+    // let file_name = filename_and_filehash.0;
+    // let file_hash = filename_and_filehash.1;
+    // println!("FILE NAME: {}", file_name);
+    // println!("FILE HASH: {:?}", file_hash);
 
-    file_path.push(file_name);
+    // file_path.push(file_name);
 
     // start receiving file packets, saving it to the filename that we got and in the directory in file_path
     save_incoming_file(&cipher, &mut initial_nonce, stream, file_path);
