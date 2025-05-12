@@ -60,6 +60,8 @@ fn send_to_connection(stream: &mut TcpStream, nonce: &mut [u8; 12], cipher: &Aes
 /// ```
 pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
 
+    println!("Connecting to {:?}...", stream.peer_addr().unwrap());
+
     // carry out DH exchange
     let dh_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
     let dh_public_key = PublicKey::from(&dh_private_key);
@@ -84,8 +86,10 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
     let cipher = Aes256Gcm::new(key);
     let mut nonce = [0u8; 12];
 
+    println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
+
     // TODO: use hash to figure out what file was requested
-    let file_path = PathBuf::from(hash);
+    let file_path = PathBuf::from(&hash);
 
     // send filename
     if let Some(file_name) = file_path.file_name() {
@@ -114,6 +118,8 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
         }
     };
 
+    println!("Beginning to send \"{hash}\" to {:?}...", stream.peer_addr().unwrap());
+
     // write packets until EOF 
     loop {
         let mut write_bytes: Vec<u8> = vec![];
@@ -127,6 +133,7 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
                     // when trying to read the next byte, we read EOF so send the last packet and return
                     let message = packet::encode_packet(write_bytes);
                     send_to_connection(&mut stream, &mut nonce, &cipher, message);
+                    println!("File \"{hash}\" successfully sent to {:?}", stream.peer_addr().unwrap());
                     return;
                 }
             }
@@ -168,8 +175,11 @@ pub fn start_listening(path: PathBuf) {
                 continue;
             }
         };
+
+        println!("Got a request from {:?}", stream.peer_addr().unwrap());
     
         // spawn a new task for each incoming stream to handle more than one connection
-        runtime.spawn(start_sender_task(stream, "".to_string()));
+        // TODO: replace the hash with the requested hash
+        runtime.spawn(start_sender_task(stream, path.to_string_lossy().into_owned()));
     }
 }

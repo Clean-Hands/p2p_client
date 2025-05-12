@@ -69,17 +69,14 @@ fn listen_for_filename_and_filehash(cipher: &Aes256Gcm, initial_nonce: &mut [u8;
 
 
 /// Takes a stream opened by a TcpListener, performs Diffie-Hellman handshake and handles incoming packets
-fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stream: TcpStream, mut save_path: PathBuf) {    
+fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stream: TcpStream, mut save_path: PathBuf) -> Result<(), String> {    
     // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so   
     // buffer needs to be PACKET_SIZE + 16 bytes in size
     let mut buffer = [0u8; packet::PACKET_SIZE+16];
 
     let filename_and_filehash = match listen_for_filename_and_filehash(&cipher, initial_nonce, &stream) {
         Ok(output) => output,
-        Err(e) => {
-            eprintln!("{e}");
-            return;
-        }
+        Err(e) => return Err(e)
     };
 
     let file_name = filename_and_filehash.0;
@@ -92,10 +89,7 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
     // read file
     let mut file = match file_rw::open_writable_file(&save_path) {
         Ok(f) => f,
-        Err(e) => {
-            eprintln!("{e}");
-            return;
-        }
+        Err(e) => return Err(e)
     };
 
     // read bytes until peer disconnects
@@ -107,28 +101,23 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
 
                 // verify file hash is correct
                 if let Err(e) = file.sync_all() {
-                    eprintln!("Failed to ensure all data written to file: {e}");
+                    return Err(format!("Failed to ensure all data written to file: {e}"));
                 }
 
                 let hash_bytes = match file_rw::read_file_bytes(&save_path) {
                     Ok(hb) => hb,
-                    Err(e) => {
-                        eprintln!("{e}");
-                        return;
-                    }
+                    Err(e) => return Err(e)
                 };
                 let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
                 
                 if computed_file_hash != file_hash {
-                    eprintln!("Failed to verify file hash. File not received correctly.")
+                    return Err(String::from("Failed to verify file hash. File not received correctly."))
                 }
-
-                return;
+                return Ok(());
             }
             Ok(_) => (),
             Err(e) => {
-                eprintln!("Failed to read from stream: {e}");
-                return;
+                return Err(format!("Failed to read from stream: {e}"))
             }
         };
 
@@ -138,8 +127,8 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
         let plaintext = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("Failed to decrypt ciphertext: {e}");
-                return;
+                return Err(format!("Failed to decrypt ciphertext: {e}"))
+                
             }
         };
         
@@ -147,20 +136,17 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
 
         let received_packet = match packet::decode_packet(plaintext) {
             Ok(p) => p,
-            Err(e) => {
-                eprintln!("Unable to decode packet: {e}");
-                return;
-            }
+            Err(e) => return Err(format!("Unable to decode packet: {e}"))
         };
         
         let data_bytes = received_packet.data.len();
         match file.write(&received_packet.data) {
             Ok(n) => {
                 if n != data_bytes {
-                    eprintln!("Read {data_bytes} file bytes from stream, was only able to write {n} bytes to file")
+                    return Err(format!("Read {data_bytes} file bytes from stream, was only able to write {n} bytes to file"))
                 }
             },
-            Err(e) => eprintln!("Failed to write byte to file: {e}")
+            Err(e) => return Err(format!("Failed to write byte to file: {e}"))
         }
     }
 }
@@ -176,9 +162,9 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
 /// let stream: TcpStream = connect_sender_stream(&addr);
 /// stream.write_all("Hello, world!".as_bytes());
 /// ```
-fn connect_stream(addr: String) -> TcpStream {
+fn connect_stream(addr: &String) -> TcpStream {
 
-    let send_addr: String = addr + ":7878";
+    let send_addr = format!("{addr}:7878");
     // loop until connection is successful
     loop {
         println!("Attempting to connect to {send_addr}...");
@@ -195,11 +181,10 @@ fn connect_stream(addr: String) -> TcpStream {
     }
 }
 
-pub fn request_file(addr: String, hash: String, mut file_path: PathBuf) {
+pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
 
-    let mut stream = connect_stream(addr);
+    let mut stream = connect_stream(&addr);
 
-    // println!("Connecting to {}", stream.peer_addr().unwrap());
     // generate DH exchange info
     let local_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
     let local_public_key = PublicKey::from(&local_private_key);
@@ -221,24 +206,14 @@ pub fn request_file(addr: String, hash: String, mut file_path: PathBuf) {
     let cipher = Aes256Gcm::new(key);
     let mut initial_nonce: [u8; 12] = [0; 12];
 
-    // TODO: send a request packet with the specific hash
+    // TODO: send a request packet with the hash of the specific file that we requested
 
-    
-    // receive the filename from sender
-    // let filename_and_filehash = match listen_for_filename_and_filehash(&cipher, &mut initial_nonce, &stream) {
-    //     Ok(output) => output,
-    //     Err(e) => {
-    //         eprintln!("{e}");
-    //         return;
-    //     }
-    // };
-    // let file_name = filename_and_filehash.0;
-    // let file_hash = filename_and_filehash.1;
-    // println!("FILE NAME: {}", file_name);
-    // println!("FILE HASH: {:?}", file_hash);
-
-    // file_path.push(file_name);
-
-    // start receiving file packets, saving it to the filename that we got and in the directory in file_path
-    save_incoming_file(&cipher, &mut initial_nonce, stream, file_path);
+    // start receiving file packets, saving it in the directory file_path
+    if let Err(e) = save_incoming_file(&cipher, &mut initial_nonce, stream, file_path.clone()) {
+        // if receiving a file fails in any way, try again
+        eprintln!("{e}");
+        // TODO: find a better solution (request a packet again if it fails)
+        //       this is just brute forcing the problem and terrible for huge files
+        request_file(addr, hash, file_path);
+    }
 }
