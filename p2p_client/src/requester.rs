@@ -20,12 +20,12 @@ use crate::file_rw;
 
 
 /// receives file name and file hash from the sender
-fn listen_for_filename_and_filehash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stream: &TcpStream) -> Result<(String, Vec<u8>), String> {
+fn await_file_name_and_hash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stream: &TcpStream) -> Result<(String, Vec<u8>), String> {
     // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext
     let mut buffer = [0u8; packet::PACKET_SIZE + 16];
     let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
     
-    // listen for filename
+    // listen for file name
     if let Err(e) = stream.read(&mut buffer) {
         return Err(format!("Failed to read from stream: {e}"));
     }
@@ -74,13 +74,13 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
     // buffer needs to be PACKET_SIZE + 16 bytes in size
     let mut buffer = [0u8; packet::PACKET_SIZE+16];
 
-    let filename_and_filehash = match listen_for_filename_and_filehash(&cipher, initial_nonce, &stream) {
+    let file_name_and_hash = match await_file_name_and_hash(&cipher, initial_nonce, &stream) {
         Ok(output) => output,
         Err(e) => return Err(e)
     };
 
-    let file_name = filename_and_filehash.0;
-    let file_hash = filename_and_filehash.1;
+    let file_name = file_name_and_hash.0;
+    let file_hash = file_name_and_hash.1;
     println!("Beginning to download \"{file_name}\"...");
     // println!("FILE HASH: {:?}", file_hash);
 

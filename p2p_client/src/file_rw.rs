@@ -7,7 +7,7 @@ use std::fs::{self, File};
 use std::io::{self, Read, Bytes};
 use std::path::PathBuf;
 
-/// Return a `Vec<u8>` filled with ALL of the bytes of the passed filename
+/// Return a `Vec<u8>` filled with ALL of the bytes of the passed file name
 /// 
 /// If you don't want to read in all of the bytes at once, consider using `open_iterable_file()`
 /// 
@@ -116,8 +116,8 @@ pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
 
 
 #[allow(dead_code)]
-pub fn rename_file(file: &mut File, new_filename: &PathBuf) -> Result<File, String> {
-    let mut new_file = match open_writable_file(new_filename) {
+pub fn rename_file(file: &mut File, new_file_name: &PathBuf) -> Result<File, String> {
+    let mut new_file = match open_writable_file(new_file_name) {
         Ok(f) => f,
         Err(e) => return Err(format!("Failed to create new file to copy data into: {e}"))
     };
@@ -139,34 +139,34 @@ mod tests {
     use super::*;
     #[test]
     fn test_read_write_file_bytes() {
-        let test_filename = PathBuf::from("test_read_write_file.txt");
+        let test_file_name = PathBuf::from("test_read_write_file.txt");
 
         let expected_data = vec![104, 101, 108, 108, 111]; // "hello"
-        if let Err(e) = write_file_bytes(&test_filename, &expected_data) {
+        if let Err(e) = write_file_bytes(&test_file_name, &expected_data) {
             panic!("{e}")
         }
 
-        let actual_data = read_file_bytes(&test_filename);
+        let actual_data = read_file_bytes(&test_file_name);
 
         assert_eq!(actual_data, Ok(expected_data));
  
         // cleanup
-        fs::remove_file(test_filename).expect("Failed to remove file");
+        fs::remove_file(test_file_name).expect("Failed to remove file");
     }
 
 
     #[test]
     fn test_open_iterable_file_and_read_correct_bytes() {
-        // let test_filename = "test_open_iterable_file.txt".to_string();
-        let test_filename = PathBuf::from("test_open_iterable_file.txt");
+        // let test_file_name = "test_open_iterable_file.txt".to_string();
+        let test_file_name = PathBuf::from("test_open_iterable_file.txt");
         let expected_data = b"Ruben said Lazuli was here :)".to_vec();
         
-        if let Err(e) = write_file_bytes(&test_filename, &expected_data) {
+        if let Err(e) = write_file_bytes(&test_file_name, &expected_data) {
             panic!("{e}")
         }
 
         let mut actual_data = vec![];
-        let bytes = match open_iterable_file(&test_filename) {
+        let bytes = match open_iterable_file(&test_file_name) {
             Ok(b) => b,
             Err(e) => panic!("{e}")
         };
@@ -180,7 +180,7 @@ mod tests {
 
         assert_eq!(actual_data, expected_data);
 
-        fs::remove_file(test_filename).expect("Failed to remove file");
+        fs::remove_file(test_file_name).expect("Failed to remove file");
     }
 
 
@@ -188,27 +188,27 @@ mod tests {
     fn test_open_writable_file_and_write_bytes() {
         use std::io::Write;
 
-        let test_filename = PathBuf::from("test_open_writable_file.txt");
+        let test_file_name = PathBuf::from("test_open_writable_file.txt");
         let to_write1 = b"partial write test ".to_vec();
         let to_write2 = b"partial write test part 2 electric boogaloo".to_vec();
         let mut expected_data = to_write1.clone();
         expected_data.extend(&to_write2);
 
-        let mut file = match open_writable_file(&test_filename) {
+        let mut file = match open_writable_file(&test_file_name) {
             Ok(f) => f,
             Err(e) => panic!("{e}")
         };
         file.write_all(&to_write1).expect("Failed to write to file");
         file.write_all(&to_write2).expect("Failed to write to file");
 
-        let actual_data = match read_file_bytes(&test_filename) {
+        let actual_data = match read_file_bytes(&test_file_name) {
             Ok(b) => b,
             Err(e) => panic!("{e}")
         };
 
         assert_eq!(actual_data, expected_data);
 
-        fs::remove_file(test_filename).expect("Failed to remove file");
+        fs::remove_file(test_file_name).expect("Failed to remove file");
     }
 
 

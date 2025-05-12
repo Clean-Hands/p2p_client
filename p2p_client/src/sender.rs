@@ -49,15 +49,29 @@ fn send_to_connection(stream: &mut TcpStream, nonce: &mut [u8; 12], cipher: &Aes
     }
 }
 
-/// Spawns a thread that handles sending messages to all IP addresses in `send_addrs`.
-/// 
-/// # Example
-/// 
-/// ```rust
-/// let send_addrs: Vec<String> = vec![String::from("127.0.0.1"), String::from("127.0.0.2")];
-/// let file_path = String::from("test.txt");
-/// start_sender_task(send_addrs, file_path);
-/// ```
+
+/// Send a file_name and its hash to the requesting TcpStream
+fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: [u8; 12], mut stream: &mut TcpStream) -> Result<(), String> {
+    
+    // send file name
+    if let Some(file_name) = file_path.file_name() {
+        let file_name_packet = packet::encode_packet(file_name.to_string_lossy().into_owned().as_bytes().to_vec());
+        send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet);
+    }
+
+    // send file hash
+    let hash_bytes = match file_rw::read_file_bytes(&file_path) {
+        Ok(hb) => hb,
+        Err(e) => return Err(e)
+    };
+    let file_hash_data = packet::compute_sha256_hash(&hash_bytes);
+    let file_hash_packet = packet::encode_packet(file_hash_data);
+    send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet);
+    return Ok(())
+}
+
+
+/// An asynchronous task that handles sending a file over `stream`
 pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
 
     println!("Connecting to {:?}...", stream.peer_addr().unwrap());
@@ -91,23 +105,10 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
     // TODO: use hash to figure out what file was requested
     let file_path = PathBuf::from(&hash);
 
-    // send filename
-    if let Some(file_name) = file_path.file_name() {
-        let file_name_packet = packet::encode_packet(file_name.to_string_lossy().into_owned().as_bytes().to_vec());
-        send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet);
+    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, nonce, &mut stream) {
+        eprintln!("Failed to send file name and hash to peer: {e}");
+        return;
     }
-
-    // send file hash
-    let hash_bytes = match file_rw::read_file_bytes(&file_path) {
-        Ok(hb) => hb,
-        Err(e) => {
-            eprintln!("{e}");
-            return;
-        }
-    };
-    let file_hash_data = packet::compute_sha256_hash(&hash_bytes);
-    let file_hash_packet = packet::encode_packet(file_hash_data);
-    send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet);
 
     // read file
     let mut file_bytes = match file_rw::open_iterable_file(&file_path) {
@@ -179,7 +180,7 @@ pub fn start_listening(path: PathBuf) {
         println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
     
         // spawn a new task for each incoming stream to handle more than one connection
-        // TODO: replace the hash with the requested hash
+        // TODO: replace the hash with the actual requested hash
         runtime.spawn(start_sender_task(stream, path.to_string_lossy().into_owned()));
     }
 }
