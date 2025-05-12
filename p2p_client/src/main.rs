@@ -1,11 +1,10 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! May 10th, 2025
+//! May 12th, 2025
 //! CS347 Advanced Software Design
 
 use std::path::PathBuf;
-use tokio::runtime::Runtime;
-use clap::Parser;
+use clap::{Parser, ArgGroup};
 mod packet;
 mod file_rw;
 mod requester;
@@ -16,15 +15,15 @@ mod encryption;
 #[derive(Parser)]
 #[command(name = "p2p_client")]
 #[command(about = "Send a file from one peer to another", long_about = None)]
-// #[command(group(
-//     ArgGroup::new("mode")
-//         .required(true)
-//         .args(["send_file", "save_path"]),
-// ))]
+#[command(group(
+    ArgGroup::new("mode")
+        .required(true)
+        .args(["send_file", "save_path"]),
+))]
 struct Cli {
-    #[arg(short = 'f', long, required = false)]
+    #[arg(short = 'f', long, group = "mode")]
     send_file: Option<PathBuf>,
-    #[arg(short = 'p', long, required = false)]
+    #[arg(short = 'p', long, group = "mode")]
     save_path: Option<PathBuf>,
     #[arg(required = true)]
     addr: String
@@ -55,7 +54,6 @@ fn run_client_server(send_addr: String, send_file: Option<PathBuf>, save_path: O
     }
 }
 
-///
 fn main() {
     let cli = Cli::parse();
     run_client_server(cli.addr, cli.send_file, cli.save_path);

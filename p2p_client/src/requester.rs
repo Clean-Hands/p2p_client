@@ -1,13 +1,18 @@
-use std::net::{TcpStream};
+//! requester.rs
+//! by Lazuli Kleinhans, Liam Keane, Ruben Boero
+//! May 12th, 2025
+//! CS347 Advanced Software Design
+
+use std::net::TcpStream;
 use std::io::{Write, Read};
 use std::thread::sleep;
 use std::time::Duration;
 use std::path::PathBuf;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
-use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
+use x25519_dalek::{EphemeralSecret, PublicKey};
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
-    Aes256Gcm, Nonce, Key
+    aead::{KeyInit, OsRng},
+    Aes256Gcm, Key
 };
 use crate::encryption;
 use crate::packet;
@@ -60,10 +65,6 @@ fn listen_for_filename_and_filehash(cipher: &Aes256Gcm, initial_nonce: &mut [u8;
 
     return Ok((String::from(file_path), file_hash.to_vec()));
 }
-
-
-
-
 
 
 

@@ -1,6 +1,6 @@
 //! packet.rs
 //! by Ruben Boero, Liam Keane, Lazuli Kleinhans
-//! May 6th, 2025
+//! May 12th, 2025
 //! CS347 Advanced Software Design
 
 use std::mem;
@@ -63,7 +63,7 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 // TODO: check that data doesn't exceed 510 bytes
 pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
     // initialize packet array and offset
-    let mut packet: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
+    let mut packet = [0u8; PACKET_SIZE];
     let mut offset = 0;
     
     // append data length

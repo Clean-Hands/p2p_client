@@ -1,20 +1,11 @@
-use std::net::{TcpStream, TcpListener};
-use sha2::digest::generic_array::{GenericArray, typenum::U12};
-use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
-use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
-    Aes256Gcm, Nonce, Key
-};
-use crate::packet;
+//! encryption.rs
+//! by Lazuli Kleinhans, Liam Keane, Ruben Boero
+//! May 12th, 2025
+//! CS347 Advanced Software Design
 
-pub struct ConnectionInfo {
-    pub sender_stream: TcpStream,
-    pub dh_public_key: PublicKey,
-    pub dh_private_key: Option<EphemeralSecret>,
-    pub dh_shared_secret: Option<SharedSecret>,
-    pub cipher: Option<Aes256Gcm>,
-    pub nonce: [u8; 12]
-}
+use sha2::digest::generic_array::{GenericArray, typenum::U12};
+use aes_gcm::{aead::Aead, Aes256Gcm};
+use crate::packet;
 
 // TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
 /// increment the nonce within the struct
@@ -48,7 +39,7 @@ pub fn encrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, messag
 /// 
 /// ciphertext is assumed to be 528 bytes because packet is always 512 bytes long & Aes256Gcm adds a 16 
 /// byte verification tag
-pub fn decrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, ciphertext: &[u8; packet::PACKET_SIZE + 16]) -> Result<[u8; 512], String> {
+pub fn decrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, ciphertext: &[u8; packet::PACKET_SIZE + 16]) -> Result<[u8; packet::PACKET_SIZE], String> {
     match cipher.decrypt(&nonce, ciphertext.as_ref()) {
         Ok(plaintext) => {
             // convert output of decrypt from vec to array so it plays nicely with decode function

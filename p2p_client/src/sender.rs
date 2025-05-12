@@ -1,10 +1,15 @@
+//! sender.rs
+//! by Lazuli Kleinhans, Liam Keane, Ruben Boero
+//! May 12th, 2025
+//! CS347 Advanced Software Design
+
 use std::net::{TcpStream, TcpListener};
 use std::io::{Write, Read};
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
-use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
+use x25519_dalek::{EphemeralSecret, PublicKey};
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{KeyInit, OsRng},
     Aes256Gcm, Nonce, Key
 };
 use crate::encryption;
@@ -81,7 +86,7 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
 
     // TODO: this is hardcoded to be a test file. fix this later
     // TOTO: use hash to figuere out whiat fiile 
-    let file_path = PathBuf::from("dracula.txt");
+    let file_path = PathBuf::from("exciting.txt");
 
     // send filename
     if let Some(file_name) = file_path.file_name() {
