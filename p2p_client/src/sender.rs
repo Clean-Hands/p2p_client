@@ -84,9 +84,8 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
     let cipher = Aes256Gcm::new(key);
     let mut nonce = [0u8; 12];
 
-    // TODO: this is hardcoded to be a test file. fix this later
-    // TOTO: use hash to figuere out whiat fiile 
-    let file_path = PathBuf::from("exciting.txt");
+    // TODO: use hash to figure out what file was requested
+    let file_path = PathBuf::from(hash);
 
     // send filename
     if let Some(file_name) = file_path.file_name() {
