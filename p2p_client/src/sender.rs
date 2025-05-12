@@ -176,7 +176,7 @@ pub fn start_listening(path: PathBuf) {
             }
         };
 
-        println!("Got a request from {:?}", stream.peer_addr().unwrap());
+        println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
     
         // spawn a new task for each incoming stream to handle more than one connection
         // TODO: replace the hash with the requested hash

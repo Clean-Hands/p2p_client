@@ -81,10 +81,10 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
 
     let file_name = filename_and_filehash.0;
     let file_hash = filename_and_filehash.1;
-    println!("FILE NAME: {}", file_name);
-    println!("FILE HASH: {:?}", file_hash);
+    println!("Beginning to download \"{file_name}\"...");
+    // println!("FILE HASH: {:?}", file_hash);
 
-    save_path.push(file_name);
+    save_path.push(&file_name);
     
     // read file
     let mut file = match file_rw::open_writable_file(&save_path) {
@@ -112,6 +112,8 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
                 
                 if computed_file_hash != file_hash {
                     return Err(String::from("Failed to verify file hash. File not received correctly."))
+                } else {
+                    println!("Successfully downloaded \"{file_name}\"");
                 }
                 return Ok(());
             }
