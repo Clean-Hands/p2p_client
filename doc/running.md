@@ -11,7 +11,7 @@
   - `./target/debug/p2p_client --help`
   - *or*
   - `.\target\debug\p2p_client.exe --help`
-- You can also directly run the program using `cargo run` [options]`:
+- You can also directly run the program using `cargo run [options]`:
   - To start the sender:
     - `cargo run <IP address of receiver> -f <file to send>`
   - To start the receiver:
