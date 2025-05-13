@@ -7,72 +7,43 @@ use std::net::{TcpStream, TcpListener};
 use std::io::{Write, Read};
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
+use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use x25519_dalek::{EphemeralSecret, PublicKey};
 use aes_gcm::{
     aead::{KeyInit, OsRng},
-    Aes256Gcm, Nonce, Key
+    Aes256Gcm, Key
 };
 use crate::encryption;
 use crate::packet;
 use crate::file_rw;
 
 
-
-/// Writes the String `message` to all `TcpStream` objects in the Vec `streams`.
-/// 
-/// # Example
-/// 
-/// ```rust
-/// let streams: Vec<TcpStream> = vec![stream1, stream2];
-/// let message = String::from("Hello, world!");
-/// send_to_all_connections(&streams, message);
-/// ```
-fn send_to_connection(stream: &mut TcpStream, nonce: &mut [u8; 12], cipher: &Aes256Gcm, message: [u8; packet::PACKET_SIZE]) {
-    // encrypt message
-    let enc_nonce = Nonce::from_slice(nonce);
-    // this function call assumes that cipher is Some type, still need to check that cipher
-    // is initialized correctly in start_sender_task
-    let ciphertext = match encryption::encrypt_message(&enc_nonce, cipher, &message) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Encryption failed: {e}");
-            return; // don't think return is the correct action here. How do we want to handle an encryption fail?
-        }
-    };
-    
-    // increment nonce (in the struct itself)
-    encryption::increment_nonce(nonce);
-
-    if let Err(e) = stream.write_all(&ciphertext) {
-        eprintln!("Failed to write to stream: {e}");
-        return;
-    }
-}
-
-
-/// Send a file_name and its hash to the requesting TcpStream
-fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: [u8; 12], mut stream: &mut TcpStream) -> Result<(), String> {
+/// Send a file name and its hash to the requesting TcpStream
+fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: &mut [u8; 12], mut stream: &mut TcpStream) -> Result<(), String> {
     
     // send file name
-    if let Some(file_name) = file_path.file_name() {
-        let file_name_packet = packet::encode_packet(file_name.to_string_lossy().into_owned().as_bytes().to_vec());
-        send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet);
+    match file_path.file_name() {
+        Some(f) => {
+            let file_name_packet = packet::encode_packet(f.to_string_lossy().into_owned().as_bytes().to_vec());
+            encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet);
+        },
+        None => return Err(format!("Unable to get file name from file path"))
     }
 
     // send file hash
     let hash_bytes = match file_rw::read_file_bytes(&file_path) {
-        Ok(hb) => hb,
+        Ok(h) => h,
         Err(e) => return Err(e)
     };
     let file_hash_data = packet::compute_sha256_hash(&hash_bytes);
     let file_hash_packet = packet::encode_packet(file_hash_data);
-    send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet);
+    encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet);
     return Ok(())
 }
 
 
 /// An asynchronous task that handles sending a file over `stream`
-pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
+pub async fn start_sender_task(mut stream: TcpStream) {
 
     println!("Connecting to {:?}...", stream.peer_addr().unwrap());
 
@@ -95,17 +66,43 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
     let dh_shared_secret = dh_private_key.diffie_hellman(&peer_public_key);
 
     // generate and store AES cipher
-    // TODO: handle the case where secret is not Some
     let key = Key::<Aes256Gcm>::from_slice(dh_shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
-    let mut nonce = [0u8; 12];
+    let mut initial_nonce = [0u8; 12];
 
     println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
 
-    // TODO: use hash to figure out what file was requested
-    let file_path = PathBuf::from(&hash);
+    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
 
-    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, nonce, &mut stream) {
+    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
+    if let Err(e) = stream.read(&mut buffer) {
+        eprintln!("Failed to read from stream: {e}");
+        return;
+    }
+
+    let file_hash_packet = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("Failed to decrypt ciphertext: {e}");
+            return;
+        }
+    };
+
+    let file_hash_packet = match packet::decode_packet(file_hash_packet) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Unable to decode packet: {e}");
+            return;
+        }
+    };
+    let file_hash = String::from_utf8(file_hash_packet.data).expect("Unable to decode file hash");
+
+    encryption::increment_nonce(&mut initial_nonce);
+
+    // TODO: actually figure out what file this hash refers to; right now we are just taking a file name in instead of the hash
+    let file_path = PathBuf::from(&file_hash);
+
+    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, &mut initial_nonce, &mut stream) {
         eprintln!("Failed to send file name and hash to peer: {e}");
         return;
     }
@@ -119,7 +116,7 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
         }
     };
 
-    println!("Beginning to send \"{hash}\" to {:?}...", stream.peer_addr().unwrap());
+    println!("Beginning to send \"{file_hash}\" to {:?}...", stream.peer_addr().unwrap());
 
     // write packets until EOF 
     loop {
@@ -133,22 +130,21 @@ pub async fn start_sender_task(mut stream: TcpStream, hash: String) {
                 None => {
                     // when trying to read the next byte, we read EOF so send the last packet and return
                     let message = packet::encode_packet(write_bytes);
-                    send_to_connection(&mut stream, &mut nonce, &cipher, message);
-                    println!("File \"{hash}\" successfully sent to {:?}", stream.peer_addr().unwrap());
+                    encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, message);
+                    println!("File \"{file_hash}\" successfully sent to {:?}", stream.peer_addr().unwrap());
                     return;
                 }
             }
         }
         // encode the data and send the packet
         let message = packet::encode_packet(write_bytes);
-        send_to_connection(&mut stream, &mut nonce, &cipher, message);
+        encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, message);
     }
 }
 
 
 
-pub fn start_listening(path: PathBuf) {
-
+pub fn start_listening() {
     // Create and enter a new async runtime
     let runtime = Runtime::new().expect("Failed to create a runtime");
     let _ = runtime.enter();
@@ -180,7 +176,6 @@ pub fn start_listening(path: PathBuf) {
         println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
     
         // spawn a new task for each incoming stream to handle more than one connection
-        // TODO: replace the hash with the actual requested hash
-        runtime.spawn(start_sender_task(stream, path.to_string_lossy().into_owned()));
+        runtime.spawn(start_sender_task(stream));
     }
 }

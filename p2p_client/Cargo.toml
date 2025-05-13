@@ -10,3 +10,4 @@ aes-gcm = "0.10.3"
 x25519-dalek = "2.0.1"
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4.5.37", features = ["derive"] }
+hex = "0.4.3"

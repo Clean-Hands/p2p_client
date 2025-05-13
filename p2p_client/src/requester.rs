@@ -14,6 +14,7 @@ use aes_gcm::{
     aead::{KeyInit, OsRng},
     Aes256Gcm, Key
 };
+use hex;
 use crate::encryption;
 use crate::packet;
 use crate::file_rw;
@@ -37,9 +38,11 @@ fn await_file_name_and_hash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mu
         }
     };
 
-    let file_path = packet::decode_packet(file_path);
-    let file_name_packet = file_path.unwrap();
-    let file_path = String::from_utf8_lossy(file_name_packet.data.as_slice());
+    let file_path_packet = match packet::decode_packet(file_path) {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Unable to decode packet: {e}"))
+    };
+    let file_path = String::from_utf8_lossy(file_path_packet.data.as_slice());
 
     encryption::increment_nonce(initial_nonce);
     
@@ -51,7 +54,7 @@ fn await_file_name_and_hash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mu
     }
 
     let file_hash = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
-        Ok(fh) => fh,
+        Ok(h) => h,
         Err(e) => {
             return Err(format!("Failed to decrypt ciphertext: {e}"));             
         }
@@ -209,6 +212,10 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
     let mut initial_nonce: [u8; 12] = [0; 12];
 
     // TODO: send a request packet with the hash of the specific file that we requested
+    // send file hash
+    // let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
+    let file_hash_packet = packet::encode_packet(hash.as_bytes().to_vec());
+    encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, file_hash_packet);
 
     // start receiving file packets, saving it in the directory file_path
     if let Err(e) = save_incoming_file(&cipher, &mut initial_nonce, stream, file_path.clone()) {

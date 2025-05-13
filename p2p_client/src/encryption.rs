@@ -3,8 +3,10 @@
 //! May 12th, 2025
 //! CS347 Advanced Software Design
 
+use std::io::Write;
+use std::net::TcpStream;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
-use aes_gcm::{aead::Aead, Aes256Gcm};
+use aes_gcm::{aead::Aead, Aes256Gcm, Nonce};
 use crate::packet;
 
 // TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
@@ -54,6 +56,33 @@ pub fn decrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, cipher
         }
     }
 }
+
+
+
+/// Writes the String `message` to `TcpStream` object `stream`.
+pub fn send_to_connection(stream: &mut TcpStream, nonce: &mut [u8; 12], cipher: &Aes256Gcm, message: [u8; packet::PACKET_SIZE]) {
+    // encrypt message
+    let enc_nonce = Nonce::from_slice(nonce);
+    // this function call assumes that cipher is Some type, still need to check that cipher
+    // is initialized correctly in start_sender_task
+    let ciphertext = match encrypt_message(&enc_nonce, cipher, &message) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Encryption failed: {e}");
+            return; // don't think return is the correct action here. How do we want to handle an encryption fail?
+        }
+    };
+    
+    // increment nonce outside scope of function
+    increment_nonce(nonce);
+
+    if let Err(e) = stream.write_all(&ciphertext) {
+        eprintln!("Failed to write to stream: {e}");
+        return;
+    }
+}
+
+
 
 #[cfg(test)]
 mod tests {
