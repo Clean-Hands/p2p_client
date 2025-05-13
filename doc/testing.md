@@ -20,9 +20,9 @@ As many peers as needed can be set up in this way. The client app can then be ru
 
 A TL;DR to run the code in each container (2 peers):
 - On peer 1 (Alice) acting as receiver:
-  - cargo run <Bob's IP address> -p <path to save file>
+  - `cargo run <Bob's IP address> -p <path to save file>`
 - On peer 2 (Bob) acting as sender:
-  - cargo run <Alice's IP address> -f <file to send>
+  - `cargo run <Alice's IP address> -f <file to send>`
 
 
 ## Un-implemented tests we should eventually implement
