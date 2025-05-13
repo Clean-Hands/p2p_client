@@ -46,6 +46,7 @@ fn main() {
         }
         Mode::RequestCatalog { peer_address } => {}
         Mode::ViewCatalog {  } => {}
+        // add-file command must be run from within p2p_client directory or the relative paths break
         Mode::AddFile { file_path } => {
             if let Err(e) = sender::add_file_to_catalog(&file_path) {
                 eprintln!("Error adding file to catalog: {}", e);
