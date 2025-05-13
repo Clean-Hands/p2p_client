@@ -492,6 +492,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use crate::packet::PACKET_SIZE;
+
     use super::*;
     #[test]
     fn test_increment_nonce() {
@@ -510,5 +512,45 @@ mod tests {
         let mut nonce = [255u8; 12];
         increment_nonce(&mut nonce);
         assert_eq!(nonce, [0u8; 12]);
+    }
+
+    #[test]
+    fn test_encrypt_then_decrypt() {
+        // simulate generating DH exchange info
+        let bob_local_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
+        let alice_local_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
+
+        // simulate reading public key from peer
+        let bob_public_key_bytes: [u8; 32] = [0; 32];
+        let alice_public_key_bytes: [u8; 32] = [0; 32];
+        let bob_public_key = PublicKey::from(bob_public_key_bytes);
+        let alice_public_key = PublicKey::from(alice_public_key_bytes);
+
+        // generate AES cipher to decrypt messages
+        let bob_shared_secret = bob_local_private_key.diffie_hellman(&alice_public_key);
+        let alice_shared_secret = alice_local_private_key.diffie_hellman(&bob_public_key);
+
+        let bob_key = Key::<Aes256Gcm>::from_slice(bob_shared_secret.as_bytes());
+        let alice_key = Key::<Aes256Gcm>::from_slice(alice_shared_secret.as_bytes());
+        
+        let bob_cipher = Aes256Gcm::new(bob_key);
+        let alice_cipher = Aes256Gcm::new(alice_key);
+
+        let initial_nonce: [u8; 12] = [0; 12];    
+        let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
+
+        // create dummy messagem encrypt as bob, then decrypt as alice
+        let message = [7u8; packet::PACKET_SIZE];
+
+        let ciphertext = encrypt_message(&nonce, &bob_cipher, &message).unwrap();
+        let mut ciphertext_arr = [0u8; PACKET_SIZE + 16];
+
+        for i in 0..ciphertext.len() {
+            ciphertext_arr[i] = ciphertext[i];
+        }
+
+        let plaintext = decrypt_message(&nonce, &alice_cipher, &ciphertext_arr);
+
+        assert_eq!(message, plaintext.unwrap());
     }
 }

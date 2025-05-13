@@ -3,7 +3,7 @@
 ## Automated Unit Testing
 We are using the [Rust unit test functionality](https://doc.rust-lang.org/book/ch11-00-testing.html) managed by cargo. 
 
-To run the tests, run `cargo test` within the `p2p_client` directory. If you do not have cargo installed, you can get it [here](https://www.rust-lang.org/tools/install).
+To run the tests, run `cargo test` within the [p2p_client](https://github.com/rubenboero21/cs347/tree/main/p2p_client) directory. If you do not have cargo installed, you can get it [here](https://www.rust-lang.org/tools/install).
 
 Tests are present as modules at the bottom of [main.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/main.rs), [file_rw.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/file_rw.rs), and [packet.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/packet.rs).
 
@@ -23,3 +23,7 @@ A TL;DR to run the code in each container (2 peers):
   - cargo run <Bob's IP address> -p <path to save file>
 - On peer 2 (Bob) acting as sender:
   - cargo run <Alice's IP address> -f <file to send>
+
+
+## Un-implemented tests we should eventually implement
+- Docker compose script that can automatically spin up peers, send files, and test that sending/receiving was successful. (Basically, run the above manual Docker tests automatically.)
