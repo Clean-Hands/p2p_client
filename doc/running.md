@@ -7,13 +7,14 @@
   - On Mac/Linux: `./target/debug/p2p_client`
   - *or*
   - On Windows: `.\target\debug\p2p_client.exe`
-- To get instructions on how to use the client (*unfinished but correctly shows the options*):
+- To get the available options (*unfinished but correctly shows the options*):
   - `./target/debug/p2p_client --help`
   - *or*
   - `.\target\debug\p2p_client.exe --help`
-- You can also directly run the program using `cargo run` [options]` if you already know the options.
+- You can also directly run the program using `cargo run` [options]`:
+  - To start the sender:
+    - `cargo run <IP address of receiver> -f <file to send>`
+  - To start the receiver:
+    - `cargo run <IP address of sender> -p <path to save file>`
 - To find your IP address on Unix:
   - run `ifconfig | grep inet` and look for the line that is not localhost (127.0.0.1)
-
-Example:
-- 
