@@ -1,6 +1,6 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! May 12th, 2025
+//! May 13th, 2025
 //! CS347 Advanced Software Design
 
 use std::path::{Path, PathBuf};
@@ -25,8 +25,12 @@ struct Cli {
 enum Mode {
     Request { peer_address: String, file_hash: String, save_path: Option<PathBuf> },
     Send {},
-    Catalog { peer_address: String },
-    Ping { peer_address: String }
+    RequestCatalog { peer_address: String },
+    Ping { peer_address: String },
+    AddFile { file_path: String },
+    RemoveFile { hash: String },
+    ViewCatalog {},
+    AddIP {}
 }
 
 
@@ -40,7 +44,16 @@ fn main() {
         Mode::Send {} => {
             sender::start_listening();
         }
-        Mode::Catalog { peer_address } => {}
+        Mode::RequestCatalog { peer_address } => {}
+        Mode::ViewCatalog {  } => {}
+        Mode::AddFile { file_path } => {
+            if let Err(e) = sender::add_file_to_catalog(&file_path) {
+                eprintln!("Error adding file to catalog: {}", e);
+                return;
+            }
+        }
+        Mode::RemoveFile { hash } => {}
         Mode::Ping { peer_address } => {}
+        Mode::AddIP {  } => {}
     }
 }

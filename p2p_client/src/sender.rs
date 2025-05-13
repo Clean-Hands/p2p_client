@@ -5,7 +5,9 @@
 
 use std::net::{TcpStream, TcpListener};
 use std::io::{Write, Read};
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
+use std::fs::{File, copy, create_dir_all, read_to_string};
+use std::collections::HashMap;
 use tokio::runtime::Runtime;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use x25519_dalek::{EphemeralSecret, PublicKey};
@@ -17,8 +19,83 @@ use crate::encryption;
 use crate::packet;
 use crate::file_rw;
 
+type CatalogMap = HashMap<String, String>; // hash is key, filename is value
+
+/// Copies file from given location into the sender files directory. 
+/// The code must be run from the p2p_client directory or the paths to the sender files directory break
+pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
+    let file_path_buf = PathBuf::from(file_path);
+    
+    // get hash of file
+    let file_bytes = match file_rw::read_file_bytes(&file_path_buf) {
+        Ok(b) => b,
+        Err(e) => return Err(e)
+    };
+
+    let file_hash = packet::compute_sha256_hash(&file_bytes);
+    // TODO, change the hash to a represenatation easier to deal with than base 10
+    // https://users.rust-lang.org/t/how-do-i-convert-vec-of-i32-to-string/18669/5
+    let file_hash_str: String = file_hash.into_iter().map(|i| i.to_string()).collect::<String>();
+
+    // if sender-catalog/sender-files doesn't exist, create it
+    let destination_dir = Path::new("sender_catalog/sender_files");
+    if let Err(e) = create_dir_all(&destination_dir) {
+        return Err(format!("Failed to create sender files directory: {e}"));
+    }
+
+    // copy file into sender-files using its hash as filename
+    let destination_path = destination_dir.join(&file_hash_str);
+    if let Err(e) = copy(&file_path_buf, &destination_path) {
+        return Err(format!("Failed to copy file: {e}"));
+    }
+    println!("Successfully copied '{file_path}' into sender_files");
+
+    // load existing catalog or create a new one
+    let catalog_path = Path::new("sender_catalog/sender_catalog.json");
+    let mut catalog: CatalogMap;
+
+    if catalog_path.exists() {
+        let serialized = match read_to_string(&catalog_path) {
+            Ok(c) => c,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        let deserialized = match serde_json::from_str(&serialized) {
+            Ok(d) => d,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        catalog = deserialized;
+    } else {
+        catalog = HashMap::new();
+    }
+
+    // add/update entry in catalog
+    let filename = file_path_buf.file_name().ok_or("File path has no file name")?.to_string_lossy().into_owned();
+    catalog.insert(file_hash_str, filename);
+
+    // write updated catalog to sender-catalog.json
+    let mut file = match File::create(&catalog_path) {
+        Ok(f) => f,
+        Err(e) => return Err(format!("Failed to open catalog file: {e}")),
+    };
+
+    let json = match serde_json::to_string_pretty(&catalog) {
+        Ok(j) => j,
+        Err(e) => return Err(format!("Failed to serialize catalog: {e}")),
+    };
+
+    let write_result = file.write_all(json.as_bytes());
+    if let Err(e) = write_result {
+        return Err(format!("Failed to write catalog file: {e}"));
+    }
+    
+    return Ok(())
+}
+
 
 /// Send a file name and its hash to the requesting TcpStream
+// should probably delete this since requester will alreaedy know the filename and hash
 fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: &mut [u8; 12], mut stream: &mut TcpStream) -> Result<(), String> {
     
     // send file name

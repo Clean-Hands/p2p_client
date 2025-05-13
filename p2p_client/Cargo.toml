@@ -11,3 +11,4 @@ x25519-dalek = "2.0.1"
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4.5.37", features = ["derive"] }
 hex = "0.4.3"
+serde_json = "1.0.140"
