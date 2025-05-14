@@ -122,7 +122,7 @@ fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: &
 /// An asynchronous task that handles sending a file over `stream`
 pub async fn start_sender_task(mut stream: TcpStream) {
 
-    println!("Connecting to {:?}...", stream.peer_addr().unwrap());
+    // println!("Connecting to {:?}...", stream.peer_addr().unwrap());
 
     // carry out DH exchange
     let dh_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
@@ -136,7 +136,19 @@ pub async fn start_sender_task(mut stream: TcpStream) {
 
     // wait for public key response from listener
     let mut public_key_bytes: [u8; 32] = [0; 32];
-    stream.read_exact(&mut public_key_bytes).expect("Failed to read peer's public key");
+    match stream.read(&mut public_key_bytes) {
+        Ok(n) if n == 0 => return, // 0  bytes read indicates ping was sent, so do not continue connection
+        Ok(n) if n != public_key_bytes.len() => {
+            eprintln!("Incorrect number of bytes received for peer's public key. Expected {} bytes but recieved {} bytes", public_key_bytes.len(), n);
+            return;
+        },
+        Ok(_) => {},
+        Err(e) => {
+            eprintln!("Failed to read peer's public key: {e}");
+            return;
+        }
+    };
+    
     let peer_public_key = PublicKey::from(public_key_bytes);
 
     // compute and save shared secret
@@ -250,7 +262,7 @@ pub fn start_listening() {
             }
         };
 
-        println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
+        // println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
     
         // spawn a new task for each incoming stream to handle more than one connection
         runtime.spawn(start_sender_task(stream));
