@@ -186,6 +186,22 @@ fn connect_stream(addr: &String) -> TcpStream {
     }
 }
 
+/// ping an address to check that it is online. If TCP stream is established, stream is closed, 
+/// and Ok is returned. If TCP stream is not established, Err is returned.
+pub fn ping_addr(addr: &String) -> Result<String, String> {
+
+    let send_addr = format!("{addr}:7878");
+
+    println!("Attempting to ping {send_addr}");
+
+    match TcpStream::connect(&send_addr) {
+        Ok(_) => return Ok(format!("'{addr}' is online!")),
+        Err(_) => {
+            return Err(format!("'{addr}' did not respond to ping"));
+        }
+    };
+}
+
 pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
 
     let mut stream = connect_stream(&addr);

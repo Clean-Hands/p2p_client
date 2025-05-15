@@ -55,8 +55,16 @@ fn main() {
         }
         #[allow(unused_variables)]
         Mode::RemoveFile { hash } => {}
-        #[allow(unused_variables)]
-        Mode::Ping { peer_address } => {}
+        Mode::Ping { peer_address } => {
+            match requester::ping_addr(&peer_address) {
+                Ok(result) => {
+                    println!("{result}")
+                },
+                Err(e) =>  {
+                    println!("{e}")
+                }
+            };
+        }
         Mode::AddIP {  } => {}
     }
 }
