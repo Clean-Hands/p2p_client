@@ -136,7 +136,7 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 
 /// Given a file hash as input, removes the associated entry from the catalog
 /// 
-/// If the input hash is `*` then all entries in the catalog will be removed
+/// If the input hash is `DELETE-ALL` then all entries in the catalog will be removed
 pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
@@ -148,7 +148,7 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
         Err(e) => return Err(format!("Failed to retreive catalog: {e}"))
     };
 
-    if hash == "*" {
+    if hash == "DELETE-ALL" {
         catalog.clear();
         println!("Successfully removed all entries from catalog");
     } else {
