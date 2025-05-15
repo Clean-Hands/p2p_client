@@ -23,7 +23,3 @@ playground/
 # ignore specific file extensions
 *.txt
 *.tmp
-
-# ignore directory that holds file and catalog belonging to sender
-p2p_client/sender_catalog
-p2p_client/sender_catalog/*
