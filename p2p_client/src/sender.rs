@@ -135,6 +135,8 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 }
 
 /// Given a file hash as input, removes the associated entry from the catalog
+/// 
+/// If the input hash is `*` then all entries in the catalog will be removed
 pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
@@ -146,14 +148,20 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
         Err(e) => return Err(format!("Failed to retreive catalog: {e}"))
     };
 
-    catalog.remove(hash);
+    if hash == "*" {
+        catalog.clear();
+        println!("Successfully removed all entries from catalog");
+    } else {
+        match catalog.remove(hash) {
+            None => println!("'{hash}' does not exist in catalog to remove"),
+            Some(_) => println!("Successfully removed {hash} from catalog")
+        };
+    }
 
     // write updated catalog to catalog.json
     if let Err(e) = write_updated_catalog(&catalog_path, &catalog) {
         return Err(format!("Error writing updated catalog: {}", e));
     }
-
-    println!("Successfully removed {hash} from catalog");
 
     Ok(())
 }
