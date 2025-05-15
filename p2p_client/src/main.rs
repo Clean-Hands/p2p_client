@@ -46,7 +46,12 @@ fn main() {
         }
         #[allow(unused_variables)]
         Mode::RequestCatalog { peer_address } => {}
-        Mode::ViewCatalog {  } => {}
+        Mode::ViewCatalog {  } => {
+            if let Err(e) = sender::view_catalog() {
+                eprintln!("Unable to view catalog: {}", e);
+                return;
+            }
+        }
         Mode::AddFile { file_path } => {
             if let Err(e) = sender::add_file_to_catalog(&file_path) {
                 eprintln!("Error adding file to catalog: {}", e);
@@ -54,7 +59,12 @@ fn main() {
             }
         }
         #[allow(unused_variables)]
-        Mode::RemoveFile { hash } => {}
+        Mode::RemoveFile { hash } => {
+            if let Err(e) = sender::remove_file_from_catalog(&hash) {
+                eprintln!("Error removing file from catalog: {}", e);
+                return;
+            }
+        }
         Mode::Ping { peer_address } => {
             match requester::ping_addr(&peer_address) {
                 Ok(result) => {

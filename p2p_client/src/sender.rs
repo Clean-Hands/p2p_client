@@ -3,6 +3,7 @@
 //! May 14th, 2025
 //! CS347 Advanced Software Design
 
+use std::hash::Hash;
 use std::net::{TcpStream, TcpListener};
 use std::io::{Write, Read};
 use std::path::PathBuf;
@@ -21,29 +22,20 @@ use crate::encryption;
 use crate::packet;
 use crate::file_rw;
 
-type CatalogMap = HashMap<String, String>; // hash is key, file name is value
+type CatalogMap = HashMap<String, String>; // hash is key, absolute file path is value
 
-/// Copies file from given location into the sender files directory. 
-pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 
-    let absolute_file_path = match fs::canonicalize(&file_path) {
-        Ok(p) => p,
-        Err(e) => return Err(format!("Unable to get the requested file's absolute path: {e}"))
-    };
-    
-    // get hash of file
-    let file_bytes = match file_rw::read_file_bytes(&absolute_file_path) {
-        Ok(b) => b,
-        Err(e) => return Err(e)
-    };
-    let file_hash = packet::compute_sha256_hash(&file_bytes);
-    let file_hash_string: String = hex::encode(&file_hash);
-
-    // load existing catalog or create a new one
-
-    // | Linux   | /home/[user]/.local/share/p2p_client                         |
-    // | macOS   | /Users/[user]/Library/Application Support/com.LLR.p2p_client |
-    // | Windows | C:\Users\[user]\AppData\Roaming\LLR\p2p_client\data          |
+/// Gets the path to the catalog. If catalog doesn't exist, a new one is created.
+/// The catalog is stored in a static directory. 
+/// 
+/// The location of static directory depends on the OS:
+/// Linux: `/home/[user]/.local/share/p2p_client`
+/// 
+/// macOS: `/Users/[user]/Library/Application Support/com.LLR.p2p_client`
+/// 
+/// Windows: `C:\Users\[user]\AppData\Roaming\LLR\p2p_client\data`
+fn get_catalog_path() -> Result<PathBuf, String> {
+    // find existing catalog or create a new one
     let mut catalog_path = match ProjectDirs::from("com", "LLR", "p2p_client") {
         Some(d) => d.data_dir().to_owned().to_path_buf(),
         None => return Err(format!("No valid config directory could be located"))
@@ -54,8 +46,13 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     }
 
     catalog_path.push("catalog.json");
-    
-    let mut catalog: CatalogMap;
+
+    Ok(catalog_path)
+}
+
+/// Returns catalog as Hashmap given the absolute path to it
+fn get_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String> {    
+    let catalog: CatalogMap;
 
     if catalog_path.exists() {
         let serialized = match fs::read_to_string(&catalog_path) {
@@ -73,16 +70,19 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
         catalog = HashMap::new();
     }
 
-    // add/update entry in catalog
-    catalog.insert(file_hash_string, absolute_file_path.to_string_lossy().into_owned());
+    return Ok(catalog)
+}
 
+
+/// Writes changes made to catalog
+fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result<(), String> {
     // write updated catalog to catalog.json
-    let mut json_file = match File::create(&catalog_path) {
+    let mut json_file = match File::create(catalog_path) {
         Ok(f) => f,
         Err(e) => return Err(format!("Failed to open catalog file: {e}")),
     };
 
-    let json = match serde_json::to_string_pretty(&catalog) {
+    let json = match serde_json::to_string_pretty(catalog) {
         Ok(j) => j,
         Err(e) => return Err(format!("Failed to serialize catalog: {e}")),
     };
@@ -92,39 +92,132 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
         return Err(format!("Failed to write catalog file: {e}"));
     }
 
-    println!("Successfully added {file_path} to catalog");
-    
-    return Ok(())
+    Ok(())
 }
 
 
-/// Copies file from given location into the sender files directory. 
+/// Given a file path as input, computes hash of the file, then stores the hash and absolute file path in 
+/// catalog.json found in a static directory. See get_catalog_path() for catalog directory locations
+pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
+    let catalog_path = match get_catalog_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retreive catalog path: {e}"))
+    };
+
+    let mut catalog = match get_catalog(&catalog_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retreive catalog: {e}"))
+    };
+
+    let absolute_file_path = match fs::canonicalize(&file_path) {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Unable to get the requested file's absolute path: {e}"))
+    };
+    
+    // get hash of file
+    let file_bytes = match file_rw::read_file_bytes(&absolute_file_path) {
+        Ok(b) => b,
+        Err(e) => return Err(e)
+    };
+    let file_hash = packet::compute_sha256_hash(&file_bytes);
+    let file_hash_string: String = hex::encode(&file_hash);
+
+    // add/update entry in catalog
+    catalog.insert(file_hash_string, absolute_file_path.to_string_lossy().into_owned());
+
+    if let Err(e) = write_updated_catalog(&catalog_path, &catalog) {
+        return Err(format!("Error writing updated catalog: {}", e));
+    }
+
+    println!("Successfully added {file_path} to catalog");
+    
+    Ok(())
+}
+
+/// Given a file hash as input, removes the associated entry from the catalog
+pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
+    let catalog_path = match get_catalog_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retreive catalog path: {e}"))
+    };
+
+    let mut catalog = match get_catalog(&catalog_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retreive catalog: {e}"))
+    };
+
+    catalog.remove(hash);
+
+    // write updated catalog to catalog.json
+    if let Err(e) = write_updated_catalog(&catalog_path, &catalog) {
+        return Err(format!("Error writing updated catalog: {}", e));
+    }
+
+    println!("Successfully removed {hash} from catalog");
+
+    Ok(())
+}
+
+// Displays the contents of the catalog
+pub fn view_catalog() -> Result<(), String> {
+    let catalog_path = match get_catalog_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
+    };
+
+    let catalog = match get_catalog(&catalog_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
+    };
+
+    if catalog.is_empty() {
+        println!("Catalog is empty.");
+        return Ok(());
+    }
+
+    // dynamically determine max path length
+    let max_path_len = catalog
+        .values() // get ierator over the file paths stored in catalog
+        .map(|path| path.len()) // get length of each path in catalog
+        .max() // take the max of those lengths
+        .unwrap_or(0); // if the iterator is empty, return 0 instead of None
+
+    // sha256 hashes are 64 characters long
+    let hash_len = 64;
+
+    // print table header
+    println!(
+        "{:<hash_len$} | {:<width$}",
+        "SHA-256 Hash",
+        "Absolute File Path",
+        width = max_path_len
+    );
+
+    // 3 gives space for the bar separating hash and path
+    println!("{}", "-".repeat(hash_len + 3 + max_path_len));
+
+    // Print each catalog entry
+    for (hash, path) in catalog.iter() {
+        println!("{:<hash_len$} | {:<width$}", hash, path, width = max_path_len);
+    }
+
+    Ok(())
+}
+
+
+/// Returns the absolute file path of a file (from the catalog) given its hash
 pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
 
     // load existing catalog or create a new one
-    let mut catalog_path = match ProjectDirs::from("com", "LLR", "p2p_client") {
-        Some(d) => d.data_dir().to_owned().to_path_buf(),
-        None => return Err(format!("No valid config directory could be located"))
+    let catalog_path = match get_catalog_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retreive catalog path: {e}"))
     };
-    catalog_path.push("catalog.json");
 
-    let catalog: CatalogMap;
-
-    if catalog_path.exists() {
-        let serialized = match fs::read_to_string(&catalog_path) {
-            Ok(c) => c,
-            Err(e) => return Err(e.to_string()),
-        };
-
-        let deserialized = match serde_json::from_str(&serialized) {
-            Ok(d) => d,
-            Err(e) => return Err(e.to_string()),
-        };
-
-        catalog = deserialized;
-    } else {
-        return Err(format!("Catalog file doesn't exist"));
-    }
+    let catalog = match get_catalog(&catalog_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retreive catalog: {e}"))
+    };
 
     // get file path from catalog
     let file_name = match catalog.get(hash) {
