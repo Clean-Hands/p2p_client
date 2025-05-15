@@ -175,12 +175,16 @@ pub fn view_catalog() -> Result<(), String> {
         return Ok(());
     }
 
-    // dynamically determine max path length
-    let max_path_len = catalog
-        .values() // get ierator over the file paths stored in catalog
-        .map(|path| path.len()) // get length of each path in catalog
-        .max() // take the max of those lengths
-        .unwrap_or(0); // if the iterator is empty, return 0 instead of None
+    // dynamically determine max name length
+    let max_name_len = catalog
+    .values() // get ierator over the file paths stored in catalog
+    // for each path, get the name of the file and its length
+    .filter_map(|path| {
+        let name = std::path::Path::new(path).file_name()?.to_str()?;
+        Some(name.len())
+    })
+    .max() // take the max of those lengths
+    .unwrap_or(0); // if the iterator is empty, return 0 instead of None
 
     // sha256 hashes are 64 characters long
     let hash_len = 64;
@@ -189,16 +193,21 @@ pub fn view_catalog() -> Result<(), String> {
     println!(
         "{:<hash_len$} | {:<width$}",
         "SHA-256 Hash",
-        "Absolute File Path",
-        width = max_path_len
+        "File Name",
+        width = max_name_len
     );
 
     // 3 gives space for the bar separating hash and path
-    println!("{}", "-".repeat(hash_len + 3 + max_path_len));
+    println!("{}", "-".repeat(hash_len + 3 + max_name_len));
 
-    // Print each catalog entry
+    // print each catalog entry
     for (hash, path) in catalog.iter() {
-        println!("{:<hash_len$} | {:<width$}", hash, path, width = max_path_len);
+        let file_name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|os_str| os_str.to_str())
+            .unwrap_or("invalid UTF-8");
+
+        println!("{:<hash_len$} | {:<width$}", hash, file_name, width = max_name_len);
     }
 
     Ok(())

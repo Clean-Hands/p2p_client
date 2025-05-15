@@ -58,7 +58,6 @@ fn main() {
                 return;
             }
         }
-        #[allow(unused_variables)]
         Mode::RemoveFile { hash } => {
             if let Err(e) = sender::remove_file_from_catalog(&hash) {
                 eprintln!("Error removing file from catalog: {}", e);
