@@ -1,12 +1,12 @@
 //! sender.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 12th, 2025
+//! May 14th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
 use std::io::{Write, Read};
-use std::path::{PathBuf, Path};
-use std::fs::{File, copy, create_dir_all, read_to_string};
+use std::path::PathBuf;
+use std::fs::{self, File};
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
@@ -15,47 +15,50 @@ use aes_gcm::{
     aead::{KeyInit, OsRng},
     Aes256Gcm, Key
 };
+use hex;
+use directories::ProjectDirs;
 use crate::encryption;
 use crate::packet;
 use crate::file_rw;
 
-type CatalogMap = HashMap<String, String>; // hash is key, filename is value
+type CatalogMap = HashMap<String, String>; // hash is key, file name is value
 
 /// Copies file from given location into the sender files directory. 
-/// The code must be run from the p2p_client directory or the paths to the sender files directory break
 pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
-    let file_path_buf = PathBuf::from(file_path);
+
+    let absolute_file_path = match fs::canonicalize(&file_path) {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Unable to get the requested file's absolute path: {e}"))
+    };
     
     // get hash of file
-    let file_bytes = match file_rw::read_file_bytes(&file_path_buf) {
+    let file_bytes = match file_rw::read_file_bytes(&absolute_file_path) {
         Ok(b) => b,
         Err(e) => return Err(e)
     };
-
     let file_hash = packet::compute_sha256_hash(&file_bytes);
-    // TODO, change the hash to a represenatation easier to deal with than base 10
-    // https://users.rust-lang.org/t/how-do-i-convert-vec-of-i32-to-string/18669/5
-    let file_hash_str: String = file_hash.into_iter().map(|i| i.to_string()).collect::<String>();
-
-    // if sender-catalog/sender-files doesn't exist, create it
-    let destination_dir = Path::new("sender_catalog/sender_files");
-    if let Err(e) = create_dir_all(&destination_dir) {
-        return Err(format!("Failed to create sender files directory: {e}"));
-    }
-
-    // copy file into sender-files using its hash as filename
-    let destination_path = destination_dir.join(&file_hash_str);
-    if let Err(e) = copy(&file_path_buf, &destination_path) {
-        return Err(format!("Failed to copy file: {e}"));
-    }
-    println!("Successfully copied '{file_path}' into sender_files");
+    let file_hash_string: String = hex::encode(&file_hash);
 
     // load existing catalog or create a new one
-    let catalog_path = Path::new("sender_catalog/sender_catalog.json");
+
+    // | Linux   | /home/[user]/.local/share/p2p_client                         |
+    // | macOS   | /Users/[user]/Library/Application Support/com.LLR.p2p_client |
+    // | Windows | C:\Users\[user]\AppData\Roaming\LLR\p2p_client\data          |
+    let mut catalog_path = match ProjectDirs::from("com", "LLR", "p2p_client") {
+        Some(d) => d.data_dir().to_owned().to_path_buf(),
+        None => return Err(format!("No valid config directory could be located"))
+    };
+
+    if let Err(e) = fs::create_dir_all(&catalog_path) {
+        return Err(format!("Failed to create catalog directory: {e}"));
+    }
+
+    catalog_path.push("catalog.json");
+    
     let mut catalog: CatalogMap;
 
     if catalog_path.exists() {
-        let serialized = match read_to_string(&catalog_path) {
+        let serialized = match fs::read_to_string(&catalog_path) {
             Ok(c) => c,
             Err(e) => return Err(e.to_string()),
         };
@@ -71,11 +74,10 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     }
 
     // add/update entry in catalog
-    let filename = file_path_buf.file_name().ok_or("File path has no file name")?.to_string_lossy().into_owned();
-    catalog.insert(file_hash_str, filename);
+    catalog.insert(file_hash_string, absolute_file_path.to_string_lossy().into_owned());
 
-    // write updated catalog to sender-catalog.json
-    let mut file = match File::create(&catalog_path) {
+    // write updated catalog to catalog.json
+    let mut json_file = match File::create(&catalog_path) {
         Ok(f) => f,
         Err(e) => return Err(format!("Failed to open catalog file: {e}")),
     };
@@ -85,24 +87,65 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
         Err(e) => return Err(format!("Failed to serialize catalog: {e}")),
     };
 
-    let write_result = file.write_all(json.as_bytes());
+    let write_result = json_file.write_all(json.as_bytes());
     if let Err(e) = write_result {
         return Err(format!("Failed to write catalog file: {e}"));
     }
+
+    println!("Successfully added {file_path} to catalog");
     
     return Ok(())
 }
 
 
+/// Copies file from given location into the sender files directory. 
+pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
+
+    // load existing catalog or create a new one
+    let mut catalog_path = match ProjectDirs::from("com", "LLR", "p2p_client") {
+        Some(d) => d.data_dir().to_owned().to_path_buf(),
+        None => return Err(format!("No valid config directory could be located"))
+    };
+    catalog_path.push("catalog.json");
+
+    let catalog: CatalogMap;
+
+    if catalog_path.exists() {
+        let serialized = match fs::read_to_string(&catalog_path) {
+            Ok(c) => c,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        let deserialized = match serde_json::from_str(&serialized) {
+            Ok(d) => d,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        catalog = deserialized;
+    } else {
+        return Err(format!("Catalog file doesn't exist"));
+    }
+
+    // get file path from catalog
+    let file_name = match catalog.get(hash) {
+        Some(f) => f.to_owned(),
+        None => return Err(format!("Requested file does not exist in catalog"))
+    };
+    
+    return Ok(PathBuf::from(file_name))
+}
+
+
 /// Send a file name and its hash to the requesting TcpStream
-// should probably delete this since requester will alreaedy know the filename and hash
 fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: &mut [u8; 12], mut stream: &mut TcpStream) -> Result<(), String> {
     
     // send file name
     match file_path.file_name() {
         Some(f) => {
             let file_name_packet = packet::encode_packet(f.to_string_lossy().into_owned().as_bytes().to_vec());
-            encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet);
+            if let Err(e)  = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet) {
+                return Err(format!("Unable to send file name: {e}"));
+            }
         },
         None => return Err(format!("Unable to get file name from file path"))
     }
@@ -114,7 +157,10 @@ fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: &
     };
     let file_hash_data = packet::compute_sha256_hash(&hash_bytes);
     let file_hash_packet = packet::encode_packet(file_hash_data);
-    encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet);
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet) {
+        return Err(format!("Unable to send hash: {e}"));
+    }
+
     return Ok(())
 }
 
@@ -136,7 +182,10 @@ pub async fn start_sender_task(mut stream: TcpStream) {
 
     // wait for public key response from listener
     let mut public_key_bytes: [u8; 32] = [0; 32];
-    stream.read_exact(&mut public_key_bytes).expect("Failed to read peer's public key");
+    if let Err(e) = stream.read_exact(&mut public_key_bytes) {
+        eprintln!("Failed to read peer's public key: {e}");
+        return;
+    }
     let peer_public_key = PublicKey::from(public_key_bytes);
 
     // compute and save shared secret
@@ -146,17 +195,16 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     let key = Key::<Aes256Gcm>::from_slice(dh_shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
     let mut initial_nonce = [0u8; 12];
-
+    
     println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
-
-    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
-
+    
     let mut buffer = [0u8; packet::PACKET_SIZE + 16];
     if let Err(e) = stream.read(&mut buffer) {
         eprintln!("Failed to read from stream: {e}");
         return;
     }
-
+    
+    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
     let file_hash_packet = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
         Ok(h) => h,
         Err(e) => {
@@ -164,6 +212,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
             return;
         }
     };
+    encryption::increment_nonce(&mut initial_nonce);
 
     let file_hash_packet = match packet::decode_packet(file_hash_packet) {
         Ok(p) => p,
@@ -172,13 +221,19 @@ pub async fn start_sender_task(mut stream: TcpStream) {
             return;
         }
     };
-    let file_hash = String::from_utf8(file_hash_packet.data).expect("Unable to decode file hash");
 
-    encryption::increment_nonce(&mut initial_nonce);
+    
+    // figure out what file was requested
+    let file_hash = hex::encode(file_hash_packet.data);
+    let file_path = match get_file_from_catalog(&file_hash) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Failed to get file from catalog: {e}");
+            return;
+        }
+    };
 
-    // TODO: actually figure out what file this hash refers to; right now we are just taking a file name in instead of the hash
-    let file_path = PathBuf::from(&file_hash);
-
+    // send peer file name and hash to be able to know what to save it as and verify they got it correctly
     if let Err(e) = send_file_name_and_hash(&file_path, &cipher, &mut initial_nonce, &mut stream) {
         eprintln!("Failed to send file name and hash to peer: {e}");
         return;
@@ -193,7 +248,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
         }
     };
 
-    println!("Beginning to send \"{file_hash}\" to {:?}...", stream.peer_addr().unwrap());
+    println!("Beginning to send {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
 
     // write packets until EOF 
     loop {
@@ -207,15 +262,21 @@ pub async fn start_sender_task(mut stream: TcpStream) {
                 None => {
                     // when trying to read the next byte, we read EOF so send the last packet and return
                     let message = packet::encode_packet(write_bytes);
-                    encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, message);
-                    println!("File \"{file_hash}\" successfully sent to {:?}", stream.peer_addr().unwrap());
+                    if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, message) { 
+                        eprintln!("{e}");
+                        return;
+                    }
+                    println!("File {:?} successfully sent to {:?}", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
                     return;
                 }
             }
         }
         // encode the data and send the packet
         let message = packet::encode_packet(write_bytes);
-        encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, message);
+        if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, message) {
+            eprintln!("{e}");
+            return;
+        }
     }
 }
 

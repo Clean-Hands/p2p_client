@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 12th, 2025
+//! May 14th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::TcpStream;
@@ -211,11 +211,16 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
     let cipher = Aes256Gcm::new(key);
     let mut initial_nonce: [u8; 12] = [0; 12];
 
-    // TODO: send a request packet with the hash of the specific file that we requested
     // send file hash
-    // let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
-    let file_hash_packet = packet::encode_packet(hash.as_bytes().to_vec());
-    encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, file_hash_packet);
+    let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, file_hash_packet) {
+        // if receiving a file fails in any way, try again
+        eprintln!("{e}");
+        // TODO: find a better solution (request a packet again if it fails)
+        //       this is just brute forcing the problem and terrible for huge files
+        request_file(addr, hash, file_path);
+        return;
+    }
 
     // start receiving file packets, saving it in the directory file_path
     if let Err(e) = save_incoming_file(&cipher, &mut initial_nonce, stream, file_path.clone()) {
@@ -224,5 +229,6 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         // TODO: find a better solution (request a packet again if it fails)
         //       this is just brute forcing the problem and terrible for huge files
         request_file(addr, hash, file_path);
+        return;
     }
 }

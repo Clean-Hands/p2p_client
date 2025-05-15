@@ -1,6 +1,6 @@
 //! encryption.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 12th, 2025
+//! May 14th, 2025
 //! CS347 Advanced Software Design
 
 use std::io::Write;
@@ -60,7 +60,7 @@ pub fn decrypt_message(nonce: &GenericArray<u8, U12>, cipher: &Aes256Gcm, cipher
 
 
 /// Writes the String `message` to `TcpStream` object `stream`.
-pub fn send_to_connection(stream: &mut TcpStream, nonce: &mut [u8; 12], cipher: &Aes256Gcm, message: [u8; packet::PACKET_SIZE]) {
+pub fn send_to_connection(stream: &mut TcpStream, nonce: &mut [u8; 12], cipher: &Aes256Gcm, message: [u8; packet::PACKET_SIZE]) -> Result<(), String> {
     // encrypt message
     let enc_nonce = Nonce::from_slice(nonce);
     // this function call assumes that cipher is Some type, still need to check that cipher
@@ -68,8 +68,7 @@ pub fn send_to_connection(stream: &mut TcpStream, nonce: &mut [u8; 12], cipher: 
     let ciphertext = match encrypt_message(&enc_nonce, cipher, &message) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Encryption failed: {e}");
-            return; // don't think return is the correct action here. How do we want to handle an encryption fail?
+            return Err(format!("Encryption failed: {e}"));
         }
     };
     
@@ -77,9 +76,10 @@ pub fn send_to_connection(stream: &mut TcpStream, nonce: &mut [u8; 12], cipher: 
     increment_nonce(nonce);
 
     if let Err(e) = stream.write_all(&ciphertext) {
-        eprintln!("Failed to write to stream: {e}");
-        return;
+        return Err(format!("Failed to write to stream: {e}"));
     }
+    
+    Ok(())
 }
 
 

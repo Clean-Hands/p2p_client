@@ -1,10 +1,10 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! May 13th, 2025
+//! May 14th, 2025
 //! CS347 Advanced Software Design
 
-use std::path::{Path, PathBuf};
-use clap::{Parser, ArgGroup, Subcommand};
+use std::path::PathBuf;
+use clap::{Parser, Subcommand};
 mod packet;
 mod file_rw;
 mod requester;
@@ -44,16 +44,18 @@ fn main() {
         Mode::Send {} => {
             sender::start_listening();
         }
+        #[allow(unused_variables)]
         Mode::RequestCatalog { peer_address } => {}
         Mode::ViewCatalog {  } => {}
-        // add-file command must be run from within p2p_client directory or the relative paths break
         Mode::AddFile { file_path } => {
             if let Err(e) = sender::add_file_to_catalog(&file_path) {
                 eprintln!("Error adding file to catalog: {}", e);
                 return;
             }
         }
+        #[allow(unused_variables)]
         Mode::RemoveFile { hash } => {}
+        #[allow(unused_variables)]
         Mode::Ping { peer_address } => {}
         Mode::AddIP {  } => {}
     }

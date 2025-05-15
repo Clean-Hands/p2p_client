@@ -1,6 +1,6 @@
 //! packet.rs
 //! by Ruben Boero, Liam Keane, Lazuli Kleinhans
-//! May 12th, 2025
+//! May 14th, 2025
 //! CS347 Advanced Software Design
 
 use std::mem;
@@ -22,11 +22,7 @@ pub struct Packet {
 
 /// given a vector of bytes, compute and return the sha256 hash 
 pub fn compute_sha256_hash(data: &Vec<u8>) -> Vec<u8> {
-    let mut hasher = Sha256::new();
-    hasher.update(&data[..]);
-
-    // read hash digest and consume hasher
-    return hasher.finalize().to_vec();
+    return Sha256::digest(data).to_vec();
 }
 
 /// extract data from packet
