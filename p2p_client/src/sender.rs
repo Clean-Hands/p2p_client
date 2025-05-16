@@ -199,7 +199,7 @@ pub fn view_catalog() -> Result<(), String> {
 
     // print table header
     println!(
-        "{:<hash_len$} | {:<width$}",
+        "| {:<hash_len$} | {:<width$}",
         "SHA-256 Hash",
         "File Name",
         width = max_name_len
@@ -215,7 +215,7 @@ pub fn view_catalog() -> Result<(), String> {
             .and_then(|os_str| os_str.to_str())
             .unwrap_or("invalid UTF-8");
 
-        println!("{:<hash_len$} | {:<width$}", hash, file_name, width = max_name_len);
+        println!("| {:<hash_len$} | {:<width$}", hash, file_name, width = max_name_len);
     }
 
     Ok(())
