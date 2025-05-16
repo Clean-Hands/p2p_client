@@ -292,7 +292,7 @@ fn perform_dh_handshake(mut stream: &TcpStream) -> Result<Aes256Gcm, String> {
     // generate AES cipher to decrypt messages
     let shared_secret = local_private_key.diffie_hellman(&peer_public_key);
     let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
-    let cipher:  = Aes256Gcm::new(key);
+    let cipher = Aes256Gcm::new(key);
     return Ok(cipher);
 }
 
