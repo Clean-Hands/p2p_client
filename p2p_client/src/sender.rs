@@ -1,11 +1,11 @@
 //! sender.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 14th, 2025
+//! May 15th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
 use std::io::{Write, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
@@ -198,14 +198,14 @@ pub fn view_catalog() -> Result<(), String> {
 
     // dynamically determine max name length
     let max_name_len = catalog
-    .values() // get ierator over the file paths stored in catalog
-    // for each path, get the name of the file and its length
-    .filter_map(|path| {
-        let name = std::path::Path::new(path).file_name()?.to_str()?;
-        Some(name.len())
-    })
-    .max() // take the max of those lengths
-    .unwrap_or(0); // if the iterator is empty, return 0 instead of None
+        .values() // get iterator over the file paths stored in catalog
+        // for each path, get the name of the file and its length
+        .filter_map(|path| {
+            let name = Path::new(path).file_name()?.to_str()?;
+            Some(name.len())
+        })
+        .max() // take the max of those lengths
+        .unwrap_or(0); // if the iterator is empty, return 0 instead of None
 
     // sha256 hashes are 64 characters long
     let hash_len = 64;
@@ -223,7 +223,7 @@ pub fn view_catalog() -> Result<(), String> {
 
     // print each catalog entry
     for (hash, path) in catalog.iter() {
-        let file_name = std::path::Path::new(path)
+        let file_name = Path::new(path)
             .file_name()
             .and_then(|os_str| os_str.to_str())
             .unwrap_or("invalid UTF-8");
