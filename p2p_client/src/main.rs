@@ -33,12 +33,16 @@ enum Mode {
     Ping { peer_address: String },
     #[command(about = "Add a file to your local catalog")]
     AddFile { file_path: String },
-    #[command(about = "Remove a file from your local catalog")]
+    #[command(about = "Remove a file from your local catalog. Input 'DELETE-ALL' in place of a hash to wipe the catalog clean")]
     RemoveFile { hash: String },
     #[command(about = "View your local catalog")]
     ViewCatalog {},
-    #[command(about = "Add an IP to your list of available peers")]
-    AddIP {}
+    #[command(about = "Add an IP to your list of available peers. Optionally specify a human-readable alias")]
+    AddIP { peer_address: String, alias: Option<String> },
+    #[command(about = "Remove an IP from your list of available peers")]
+    RemoveIP {  peer_address: String },
+    #[command(about = "View your local list of IPs/peers")]
+    ViewIPS {}
 }
 
 
@@ -85,6 +89,25 @@ fn main() {
                 }
             };
         }
-        Mode::AddIP {  } => {}
+        Mode::AddIP { peer_address, alias } => {
+            // if no alias is specified, use the peer address
+            let alias = alias.unwrap_or_else(|| peer_address.clone());
+            if let Err(e) = requester::add_ip_to_peers(&peer_address, &alias) {
+                eprintln!("Error adding IP to list of peers: {e}");
+                return;
+            }
+        }
+        Mode::RemoveIP { peer_address } => {
+            if let Err(e) = requester::remove_ip_from_peer_list(&peer_address) {
+                eprintln!("Error removing IP from list of peers: {e}");
+                return;
+            }
+        }
+        Mode::ViewIPS {  } => {
+            if let Err(e) = requester::view_peer_list() {
+                eprintln!("Unable to view peer_list: {}", e);
+                return;
+            }            
+        }
     }
 }

@@ -15,12 +15,210 @@ use aes_gcm::{
     aead::{KeyInit, OsRng},
     Aes256Gcm, Key
 };
+use directories::ProjectDirs;
+use std::fs::{self, File};
 use hex;
 use crate::encryption;
 use crate::packet;
 use crate::file_rw;
 
 type CatalogMap = HashMap<String, String>;
+type PeerMap = HashMap<String, String>;
+
+/// Gets the path to the list of peers. If catalog doesn't exist, a new one is created.
+/// The list is stored in a static directory. 
+/// 
+/// The location of static directory depends on the OS:
+/// 
+/// Linux: `/home/[user]/.local/share/p2p_client`
+/// macOS: `/Users/[user]/Library/Application Support/com.LLR.p2p_client`
+/// Windows: `C:\Users\[user]\AppData\Roaming\LLR\p2p_client\data`
+fn get_peer_list_path() -> Result<PathBuf, String> {
+    // find existing catalog or create a new one
+    let mut peer_list_path = match ProjectDirs::from("com", "LLR", "p2p_client") {
+        Some(d) => d.data_dir().to_owned().to_path_buf(),
+        None => return Err(format!("No valid config directory could be located"))
+    };
+
+    if let Err(e) = fs::create_dir_all(&peer_list_path) {
+        return Err(format!("Failed to create peers directory: {e}"));
+    }
+
+    peer_list_path.push("peers.json");
+
+    Ok(peer_list_path)
+}
+
+
+
+/// Returns peer list as Hashmap given the absolute path to it
+/// If there is no peers.json file, creates the file and returns an empty Hashmap
+fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<CatalogMap, String> {
+    let peer_list: PeerMap;
+
+    if peer_list_path.exists() {
+        let serialized = match fs::read_to_string(&peer_list_path) {
+            Ok(c) => c,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        let deserialized = match serde_json::from_str(&serialized) {
+            Ok(d) => d,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        peer_list = deserialized;
+    } else {
+        // create the file if it doesn't exist
+        let empty_list: PeerMap = HashMap::new();
+        write_updated_peer_list(peer_list_path, &empty_list)?;
+        peer_list = empty_list;
+    }
+
+    return Ok(peer_list)
+}
+
+
+
+/// Writes changes made to peer_list. If there is not file at the given path, will create a file an populate it with a bare json list: {}
+fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Result<(), String> {
+    // write updated peer list to peers.json
+    let mut json_file = match File::create(peer_list_path) {
+        Ok(f) => f,
+        Err(e) => return Err(format!("Failed to open peer list file: {e}")),
+    };
+
+    let json = match serde_json::to_string_pretty(peer_list) {
+        Ok(j) => j,
+        Err(e) => return Err(format!("Failed to serialize peer list: {e}")),
+    };
+
+    let write_result = json_file.write_all(json.as_bytes());
+    if let Err(e) = write_result {
+        return Err(format!("Failed to write peer list file: {e}"));
+    }
+
+    Ok(())
+}
+
+
+
+/// Given an IP and alias for the IP as input, stores them in peers.json
+/// found in a static directory. See get_peer_list_path() for peers.json locations
+pub fn add_ip_to_peers(peer_addr: &String, alias: &String) -> Result<(), String> {
+    let peer_list_path = match get_peer_list_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
+    };
+
+    let mut peer_list = match get_deserialized_peer_list(&peer_list_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
+    };
+
+    // add/update entry in peer_list
+    peer_list.insert(peer_addr.clone(), alias.clone());
+
+    if let Err(e) = write_updated_peer_list(&peer_list_path, &peer_list) {
+        return Err(format!("Error writing updated catalog: {}", e));
+    }
+
+    println!("Successfully added {alias} ({peer_addr}) to peer list");
+    
+    Ok(())
+}
+
+
+
+/// Given an IP as input, removes the associated entry from the peer list
+/// 
+/// If the input IP is `DELETE-ALL` then all entries in the catalog will be removed
+pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
+    let peer_list_path = match get_peer_list_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
+    };
+
+    let mut peer_list = match get_deserialized_peer_list(&peer_list_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
+    };
+
+    if peer_addr == "DELETE-ALL" {
+        peer_list.clear();
+        println!("Successfully removed all entries from peer list");
+    } else {
+        match peer_list.remove(peer_addr) {
+            None => println!("Entry \"{peer_addr}\" does not exist in catalog"),
+            Some(f) => {
+                let alias = String::from(f);
+                // .unwrap().to_string_lossy().into_owned();
+                println!("Successfully removed {alias} ({peer_addr}) from catalog")}
+        };
+    }
+
+    // write updated catalog to catalog.json
+    if let Err(e) = write_updated_peer_list(&peer_list_path, &peer_list) {
+        return Err(format!("Error writing updated catalog: {}", e));
+    }
+
+    Ok(())
+}
+
+
+
+/// Displays the contents of the peer list
+pub fn view_peer_list() -> Result<(), String> {
+    let peer_list_path = match get_peer_list_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
+    };
+
+    let peer_list = match get_deserialized_peer_list(&peer_list_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
+    };
+
+    if peer_list.is_empty() {
+        println!("Catalog is empty.");
+        return Ok(());
+    }
+
+    let max_ip_len = peer_list
+        .keys()
+        .map(|ip| ip.len())
+        .max()
+        .unwrap_or(0);
+
+    let max_alias_len = peer_list
+        .values()
+        .map(|alias| alias.len())
+        .max()
+        .unwrap_or(max_ip_len);
+
+    // print table header
+    println!(
+        "| {:<max_ip_len$} | {:<width$}",
+        "IP Address",
+        "File Name",
+        width = max_alias_len
+    );
+
+    // 2 gives space for the bar separating hash and path
+    println!("|{}|{}", "=".repeat(2 + max_ip_len), "=".repeat(2 + max_alias_len));
+
+    // print each catalog entry
+    for (hash, path) in peer_list.iter() {
+        let file_name = Path::new(path)
+            .file_name()
+            .and_then(|os_str| os_str.to_str())
+            .unwrap_or("invalid UTF-8");
+
+        println!("| {:<max_ip_len$} | {:<width$}", hash, file_name, width = max_alias_len);
+    }
+
+    Ok(())
+}
 
 
 

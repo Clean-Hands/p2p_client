@@ -57,12 +57,19 @@ fn get_serialized_catalog(catalog_path: &PathBuf) -> Result<Vec<u8>, String> {
             Err(e) => Err(e.to_string()),
         }
     } else {
-        Err(String::from("No catalog found at given path"))
+        // create the file if it doesn't exist
+        let empty_catg: CatalogMap = HashMap::new();
+        write_updated_catalog(catalog_path, &empty_catg)?;
+        match fs::read(&catalog_path) {
+            Ok(bytes) => Ok(bytes),
+            Err(e) => Err(e.to_string()),
+        }
     }
 }
 
 
-/// Returns catalog as Hashmap given the absolute path to it
+/// Returns catalog as Hashmap given the absolute path to it.
+/// If there is no catalog.json file, creates the file and returns an empty Hashmap
 fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String> {
     let catalog: CatalogMap;
 
@@ -79,14 +86,17 @@ fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String
 
         catalog = deserialized;
     } else {
-        return Err(String::from("No catalog found at given path"));
+        // create the file if it doesn't exist
+        let empty_catg: CatalogMap = HashMap::new();
+        write_updated_catalog(catalog_path, &empty_catg)?;
+        catalog = empty_catg;
     }
 
     return Ok(catalog)
 }
 
 
-/// Writes changes made to catalog
+/// Writes changes made to catalog. If there is not file at the given path, will create a file an populate it with a bare json list: {}
 fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result<(), String> {
     // write updated catalog to catalog.json
     let mut json_file = match File::create(catalog_path) {
@@ -134,12 +144,15 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     let file_hash = packet::compute_sha256_hash(&file_bytes);
     let file_hash_string: String = hex::encode(&file_hash);
 
+    // Ruben doesn't think this is the behavior we want. I think we want the value to be updated,
+    // otherwise if you want to change the file path you need to call remove, then add
+    
     // check if this file is already in catalog
     // checks by hash, not file name, so two files with the same name but different content can coexist
-    if catalog.contains_key(&file_hash_string) {
-        println!("File {file_path} ({file_hash_string}) already exists in catalog");
-        return Ok(());
-    }
+    // if catalog.contains_key(&file_hash_string) {
+    //     println!("File {file_path} ({file_hash_string}) already exists in catalog");
+    //     return Ok(());
+    // }
 
     // add/update entry in catalog
     catalog.insert(file_hash_string.clone(), absolute_file_path.to_string_lossy().into_owned());
@@ -368,7 +381,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
         Ok(m) if m == "request_catalog" => {
             println!("Request catalog mode");
             if let Err(e) = fulfill_catalog_request(&mut stream, &mut initial_nonce, &cipher) {
-                eprintln!("Failed to fulfull catalog request: {e}");
+                eprintln!("Failed to fulfill catalog request: {e}");
             }
         },
         Ok(m) if m == "request_file" => {
@@ -379,14 +392,14 @@ pub async fn start_sender_task(mut stream: TcpStream) {
         },
         Ok(_) => {},
         Err(e) => {
-            eprintln!("Failed to read mode:{e}");
+            eprintln!("Failed to read mode: {e}");
             return
         }
     }
 }
 
 
-/// Handles sending sender's catalog to requester
+/// Handles sending listener's catalog to requester
 fn fulfill_catalog_request(stream: &mut TcpStream, initial_nonce: &mut[u8; 12], cipher: &Aes256Gcm) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
