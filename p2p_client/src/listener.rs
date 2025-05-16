@@ -1,4 +1,4 @@
-//! sender.rs
+//! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
 //! May 16th, 2025
 //! CS347 Advanced Software Design
@@ -225,8 +225,10 @@ pub fn view_catalog() -> Result<(), String> {
             let name = Path::new(path).file_name()?.to_str()?;
             Some(name.len())
         })
-        .max() // take the max of those lengths
-        .unwrap_or(0); // if the iterator is empty, return 0 instead of None
+        // make sure that we don't go under the length of the table header
+        .filter(|length| length > &"File Name".len())
+        .max()
+        .unwrap_or("File Name".len());
 
     // sha256 hashes are 64 characters long
     let hash_len = 64;

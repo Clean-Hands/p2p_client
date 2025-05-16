@@ -171,36 +171,40 @@ pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
 pub fn view_peer_list() -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
+        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}")),
     };
 
     let peer_list = match get_deserialized_peer_list(&peer_list_path) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
+        Err(e) => return Err(format!("Failed to retrieve peer list: {e}")),
     };
 
     if peer_list.is_empty() {
-        println!("Catalog is empty.");
+        println!("Peer list is empty.");
         return Ok(());
     }
 
     let max_ip_len = peer_list
         .keys()
         .map(|ip| ip.len())
+        // make sure that we don't go under the length of the table header
+        .filter(|length| length > &"IP Address".len())
         .max()
-        .unwrap_or(0);
+        .unwrap_or("IP Address".len());
 
     let max_alias_len = peer_list
         .values()
         .map(|alias| alias.len())
+        // make sure that we don't go under the length of the table header
+        .filter(|length| length > &"Alias".len())
         .max()
-        .unwrap_or(max_ip_len);
+        .unwrap_or("Alias".len());
 
     // print table header
     println!(
         "| {:<max_ip_len$} | {:<width$}",
         "IP Address",
-        "File Name",
+        "Alias",
         width = max_alias_len
     );
 
@@ -315,8 +319,10 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
             let name = Path::new(path).file_name()?.to_str()?;
             Some(name.len())
         })
-        .max() // take the max of those lengths
-        .unwrap_or(0); // if the iterator is empty, return 0 instead of None
+        // make sure that we don't go under the length of the table header
+        .filter(|length| length > &"File Name".len())
+        .max()
+        .unwrap_or("File Name".len());
 
     let hash_len = 64;
 

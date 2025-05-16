@@ -7,9 +7,9 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 mod encryption;
 mod file_rw;
+mod listener;
 mod packet;
 mod requester;
-mod sender;
 
 #[derive(Parser)]
 #[command(name = "p2p_client")]
@@ -21,20 +21,22 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Mode {
-    Receiver {
+    #[command(about = "Subcommands related to requesting and downloading files")]
+    Request {
         #[command(subcommand)]
-        command: RequesterCommand,
+        command: RequestCommand,
     },
-    Sender {
+    #[command(about = "Subcommands related to listening for requests and sending files")]
+    Listen {
         #[command(subcommand)]
-        command: SenderCommand,
+        command: ListenCommand,
     },
 }
 
 #[derive(Subcommand)]
-enum RequesterCommand {
+enum RequestCommand {
     #[command(about = "Request a file from a peer")]
-    Request {
+    File {
         peer_address: String,
         file_hash: String,
         save_path: Option<PathBuf>,
@@ -43,24 +45,26 @@ enum RequesterCommand {
     Catalog { peer_address: String },
     #[command(about = "Check if a specific peer is available for requests")]
     Ping { peer_address: String },
-    #[command(about = "Add an IP to your list of available peers. Optionally specify a human-readable alias")]
-    AddIP { 
-        peer_address: String, 
-        alias: Option<String>
+    #[command(about = "Add an IP and an optional alias to your list of available peers")]
+    AddIP {
+        peer_address: String,
+        alias: Option<String>,
     },
     #[command(about = "Remove an IP from your list of available peers")]
     RemoveIP { peer_address: String },
     #[command(about = "View your local list of IPs/peers")]
-    ViewIPS {}
+    ViewIPS {},
 }
 
 #[derive(Subcommand)]
-enum SenderCommand {
+enum ListenCommand {
     #[command(about = "Start listening for incoming requests")]
-    Listen {},
+    Start {},
     #[command(about = "Add a file to your local catalog")]
     AddFile { file_path: String },
-    #[command(about = "Remove a file from your local catalog. Input 'DELETE-ALL' in place of a hash to wipe the catalog clean")]
+    #[command(
+        about = "Remove a file from your local catalog. Input \"DELETE-ALL\" in place of a hash to wipe the catalog clean"
+    )]
     RemoveFile { hash: String },
     #[command(about = "View your local catalog")]
     ViewCatalog {},
@@ -69,9 +73,9 @@ enum SenderCommand {
 fn main() {
     let cli = Cli::parse();
     match cli.mode {
-        // parse the receiver subcommand
-        Mode::Receiver { command } => match command {
-            RequesterCommand::Request {
+        // parse the request subcommand
+        Mode::Request { command } => match command {
+            RequestCommand::File {
                 peer_address,
                 file_hash,
                 save_path,
@@ -82,13 +86,12 @@ fn main() {
                     save_path.unwrap_or(PathBuf::from(".")),
                 );
             }
-            RequesterCommand::Catalog { peer_address } => {
+            RequestCommand::Catalog { peer_address } => {
                 if let Err(e) = requester::request_catalog(&peer_address) {
                     eprintln!("Error while requesting catalog: {e}")
                 }
-
             }
-            RequesterCommand::Ping { peer_address } => {
+            RequestCommand::Ping { peer_address } => {
                 match requester::ping_addr(&peer_address) {
                     Ok(result) => {
                         println!("{result}")
@@ -98,47 +101,50 @@ fn main() {
                     }
                 };
             }
-            RequesterCommand::AddIP { peer_address, alias } => {
+            RequestCommand::AddIP {
+                peer_address,
+                alias,
+            } => {
                 // if no alias is specified, use the peer address
-                let alias = alias.unwrap_or_else(|| peer_address.clone());
+                let alias = alias.unwrap_or(peer_address.clone());
                 if let Err(e) = requester::add_ip_to_peers(&peer_address, &alias) {
                     eprintln!("Error adding IP to list of peers: {e}");
                     return;
                 }
             }
-            RequesterCommand::RemoveIP  { peer_address } => {
+            RequestCommand::RemoveIP { peer_address } => {
                 if let Err(e) = requester::remove_ip_from_peer_list(&peer_address) {
                     eprintln!("Error removing IP from list of peers: {e}");
                     return;
                 }
             }
-            RequesterCommand::ViewIPS {} => {
+            RequestCommand::ViewIPS {} => {
                 if let Err(e) = requester::view_peer_list() {
                     eprintln!("Unable to view peer_list: {}", e);
                     return;
-                }     
+                }
             }
         },
 
-        // parse the sender subcommand
-        Mode::Sender { command } => match command {
-            SenderCommand::Listen {} => {
-                sender::start_listening();
+        // parse the listen subcommand
+        Mode::Listen { command } => match command {
+            ListenCommand::Start {} => {
+                listener::start_listening();
             }
-            SenderCommand::ViewCatalog {} => {
-                if let Err(e) = sender::view_catalog() {
+            ListenCommand::ViewCatalog {} => {
+                if let Err(e) = listener::view_catalog() {
                     eprintln!("Unable to view catalog: {}", e);
                     return;
                 }
             }
-            SenderCommand::AddFile { file_path } => {
-                if let Err(e) = sender::add_file_to_catalog(&file_path) {
+            ListenCommand::AddFile { file_path } => {
+                if let Err(e) = listener::add_file_to_catalog(&file_path) {
                     eprintln!("Error adding file to catalog: {e}");
                     return;
                 }
             }
-            SenderCommand::RemoveFile { hash } => {
-                if let Err(e) = sender::remove_file_from_catalog(&hash) {
+            ListenCommand::RemoveFile { hash } => {
+                if let Err(e) = listener::remove_file_from_catalog(&hash) {
                     eprintln!("Error removing file from catalog: {e}");
                     return;
                 }
