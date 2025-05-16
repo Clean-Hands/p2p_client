@@ -8,6 +8,7 @@ use std::io::{Write, Read};
 use std::thread::sleep;
 use std::time::Duration;
 use std::path::PathBuf;
+use std::collections::HashMap;
 use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use x25519_dalek::{EphemeralSecret, PublicKey};
 use aes_gcm::{
@@ -18,6 +19,8 @@ use hex;
 use crate::encryption;
 use crate::packet;
 use crate::file_rw;
+
+type CatalogMap = HashMap<String, String>;
 
 
 /// receives file name and file hash from the sender
@@ -70,7 +73,7 @@ fn await_file_name_and_hash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mu
 }
 
 
-
+// this function DOES NOT perform DH handshake, why does it say it does?
 /// Takes a stream opened by a TcpListener, performs Diffie-Hellman handshake and handles incoming packets
 fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stream: TcpStream, mut save_path: PathBuf) -> Result<(), String> {    
     // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so   
@@ -186,6 +189,122 @@ fn connect_stream(addr: &String) -> TcpStream {
     }
 }
 
+/// Requests catalog from a given sender's IP address, then prints the contents of the catalog to stdout
+pub fn request_catalog(addr: &String) -> Result<(), String> {
+    let mut stream = connect_stream(&addr);
+
+    // generate DH exchange info
+    let local_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
+    let local_public_key = PublicKey::from(&local_private_key);
+
+    // read public key from peer
+    let mut peer_public_key_bytes: [u8; 32] = [0; 32];
+    stream.read_exact(&mut peer_public_key_bytes).expect("Failed to read peer's public key");
+    let peer_public_key = PublicKey::from(peer_public_key_bytes);
+
+    // send local public key to peer
+    if let Err(e) = stream.write_all(local_public_key.as_bytes()) {
+        return Err(format!("Failed to send local public key: {e}"));
+    }
+
+    // generate AES cipher to decrypt messages
+    let shared_secret = local_private_key.diffie_hellman(&peer_public_key);
+    let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
+    let cipher = Aes256Gcm::new(key);
+    let mut initial_nonce: [u8; 12] = [0; 12];
+
+    // send mode packet
+    let req_catalog_packet = packet::encode_packet(String::from("request_catalog").into_bytes());
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, req_catalog_packet) {
+        return Err(format!("Failed to send request for sender catalog {e}"));
+    }
+
+    // listen for response
+    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
+    let mut catalog_bytes = Vec::new();
+
+    loop {
+        match stream.read(&mut buffer) {
+            Ok(0) => break, // EOF
+            Ok(_) => {
+                let nonce = GenericArray::clone_from_slice(&initial_nonce);
+                let decrypted = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return Err(format!("Failed to decrypt packet: {e}"));
+                    }
+                };
+                encryption::increment_nonce(&mut initial_nonce);
+
+                let packet = match packet::decode_packet(decrypted) {
+                    Ok(pkt) => pkt,
+                    Err(e) => {
+                        return Err(format!("Failed to decode packet: {e}"));
+                    }
+                };
+
+                catalog_bytes.extend_from_slice(&packet.data);
+            }
+            Err(e) => {
+                return Err(format!("Error reading from stream: {e}"));
+            }
+        }
+    }
+
+    // print catalog
+    let catalog_json = match String::from_utf8(catalog_bytes) {
+        Ok(s) => s,
+        Err(e) => {
+            return Err(format!("Failed to parse catalog as UTF-8: {e}"));
+        }
+    };
+
+    let catalog: CatalogMap = match serde_json::from_str(&catalog_json) {
+        Ok(c) => c,
+        Err(e) => {
+            return Err(format!("Failed to deserialize catalog into hash map: {e}"));
+        }
+    };
+
+    if catalog.is_empty() {
+        println!("Catalog is empty.");
+        return Ok(())
+    }
+
+    // dynamically determine max len name
+    // see view_catalog() in senders.rs for detailed comments
+    let max_name_len = catalog
+        .values()
+        .filter_map(|path| {
+            let name = std::path::Path::new(path).file_name()?.to_str()?;
+            Some(name.len())
+        })
+        .max()
+        .unwrap_or(0);
+
+    let hash_len = 64;
+
+    println!(
+        "{:<hash_len$} | {:<width$}",
+        "SHA-256 Hash",
+        "File Name",
+        width = max_name_len
+    );
+    println!("{}", "-".repeat(hash_len + 3 + max_name_len));
+
+    for (hash, path) in catalog {
+        let file_name = std::path::Path::new(&path)
+            .file_name()
+            .and_then(|os| os.to_str())
+            .unwrap_or("invalid UTF-8");
+
+        println!("{:<hash_len$} | {:<width$}", hash, file_name, width = max_name_len);
+    }
+
+    Ok(())
+}
+
+
 /// ping an address to check that it is online. If TCP stream is established, stream is closed, 
 /// and Ok is returned. If TCP stream is not established, Err is returned.
 pub fn ping_addr(addr: &String) -> Result<String, String> {
@@ -226,6 +345,13 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
     let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
     let mut initial_nonce: [u8; 12] = [0; 12];
+
+    // send mode packet
+    let req_catalog_packet = packet::encode_packet(String::from("request_file").into_bytes());
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, req_catalog_packet) {
+        eprintln!("Failed to send request for sender catalog {e}");
+        return;
+    }
 
     // send file hash
     let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
