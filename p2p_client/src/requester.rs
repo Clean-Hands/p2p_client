@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 15th, 2025
+//! May 16th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::TcpStream;
@@ -128,7 +128,9 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
         "File Name",
         width = max_name_len
     );
-    println!("{}", "-".repeat(hash_len + 3 + max_name_len));
+    
+    // 2 gives space for the bar separating hash and path
+    println!("|{}|{}", "=".repeat(2 + hash_len), "=".repeat(2 + max_name_len));
 
     for (hash, path) in catalog {
         let file_name = Path::new(&path)

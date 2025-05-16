@@ -1,6 +1,6 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! May 14th, 2025
+//! May 16th, 2025
 //! CS347 Advanced Software Design
 
 use std::path::PathBuf;
@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 mod packet;
 mod file_rw;
 mod requester;
-mod sender;
+mod listener;
 mod encryption;
 
 
@@ -23,13 +23,21 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Mode {
+    #[command(about = "Request a file from a peer")]
     Request { peer_address: String, file_hash: String, save_path: Option<PathBuf> },
-    Send {},
+    #[command(about = "Start listening for incoming requests")]
+    Listen {},
+    #[command(about = "Request the catalog of a specific peer")]
     RequestCatalog { peer_address: String },
+    #[command(about = "Check if a specific peer is available for requests")]
     Ping { peer_address: String },
+    #[command(about = "Add a file to your local catalog")]
     AddFile { file_path: String },
+    #[command(about = "Remove a file from your local catalog")]
     RemoveFile { hash: String },
+    #[command(about = "View your local catalog")]
     ViewCatalog {},
+    #[command(about = "Add an IP to your list of available peers")]
     AddIP {}
 }
 
@@ -41,28 +49,28 @@ fn main() {
         Mode::Request { peer_address, file_hash, save_path } => {
             requester::request_file(peer_address, file_hash, save_path.unwrap_or(PathBuf::from(".")));
         }
-        Mode::Send {} => {
-            sender::start_listening();
+        Mode::Listen {} => {
+            listener::start_listening();
         }
         Mode::RequestCatalog { peer_address } => {
             if let Err(e) = requester::request_catalog(&peer_address) {
                 eprintln!("Error while requesting catalog: {e}")
             }
         }
-        Mode::ViewCatalog {  } => {
-            if let Err(e) = sender::view_catalog() {
+        Mode::ViewCatalog {} => {
+            if let Err(e) = listener::view_catalog() {
                 eprintln!("Unable to view catalog: {}", e);
                 return;
             }
         }
         Mode::AddFile { file_path } => {
-            if let Err(e) = sender::add_file_to_catalog(&file_path) {
+            if let Err(e) = listener::add_file_to_catalog(&file_path) {
                 eprintln!("Error adding file to catalog: {e}");
                 return;
             }
         }
         Mode::RemoveFile { hash } => {
-            if let Err(e) = sender::remove_file_from_catalog(&hash) {
+            if let Err(e) = listener::remove_file_from_catalog(&hash) {
                 eprintln!("Error removing file from catalog: {e}");
                 return;
             }

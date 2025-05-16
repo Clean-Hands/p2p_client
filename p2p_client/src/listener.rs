@@ -1,6 +1,6 @@
-//! sender.rs
+//! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 15th, 2025
+//! May 16th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::{TcpStream, TcpListener};
@@ -28,10 +28,9 @@ type CatalogMap = HashMap<String, String>; // hash is key, absolute file path is
 /// The catalog is stored in a static directory. 
 /// 
 /// The location of static directory depends on the OS:
+/// 
 /// Linux: `/home/[user]/.local/share/p2p_client`
-/// 
 /// macOS: `/Users/[user]/Library/Application Support/com.LLR.p2p_client`
-/// 
 /// Windows: `C:\Users\[user]\AppData\Roaming\LLR\p2p_client\data`
 fn get_catalog_path() -> Result<PathBuf, String> {
     // find existing catalog or create a new one
@@ -135,14 +134,21 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     let file_hash = packet::compute_sha256_hash(&file_bytes);
     let file_hash_string: String = hex::encode(&file_hash);
 
+    // check if this file is already in catalog
+    // checks by hash, not file name, so two files with the same name but different content can coexist
+    if catalog.contains_key(&file_hash_string) {
+        println!("File {file_path} ({file_hash_string}) already exists in catalog");
+        return Ok(());
+    }
+
     // add/update entry in catalog
-    catalog.insert(file_hash_string, absolute_file_path.to_string_lossy().into_owned());
+    catalog.insert(file_hash_string.clone(), absolute_file_path.to_string_lossy().into_owned());
 
     if let Err(e) = write_updated_catalog(&catalog_path, &catalog) {
         return Err(format!("Error writing updated catalog: {}", e));
     }
 
-    println!("Successfully added {file_path} to catalog");
+    println!("Successfully added {file_path} ({file_hash_string}) to catalog");
     
     Ok(())
 }
@@ -166,8 +172,10 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
         println!("Successfully removed all entries from catalog");
     } else {
         match catalog.remove(hash) {
-            None => println!("'{hash}' does not exist in catalog to remove"),
-            Some(_) => println!("Successfully removed {hash} from catalog")
+            None => println!("Entry \"{hash}\" does not exist in catalog"),
+            Some(f) => {
+                let file_name = PathBuf::from(f).file_name().unwrap().to_string_lossy().into_owned();
+                println!("Successfully removed {file_name} ({hash}) from catalog")}
         };
     }
 
@@ -218,8 +226,8 @@ pub fn view_catalog() -> Result<(), String> {
         width = max_name_len
     );
 
-    // 3 gives space for the bar separating hash and path
-    println!("{}", "-".repeat(hash_len + 3 + max_name_len));
+    // 2 gives space for the bar separating hash and path
+    println!("|{}|{}", "=".repeat(2 + hash_len), "=".repeat(2 + max_name_len));
 
     // print each catalog entry
     for (hash, path) in catalog.iter() {
