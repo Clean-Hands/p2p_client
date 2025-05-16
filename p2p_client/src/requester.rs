@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 14th, 2025
+//! May 15th, 2025
 //! CS347 Advanced Software Design
 
 use std::net::TcpStream;
@@ -285,7 +285,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
     let hash_len = 64;
 
     println!(
-        "{:<hash_len$} | {:<width$}",
+        "| {:<hash_len$} | {:<width$}",
         "SHA-256 Hash",
         "File Name",
         width = max_name_len
@@ -298,7 +298,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
             .and_then(|os| os.to_str())
             .unwrap_or("invalid UTF-8");
 
-        println!("{:<hash_len$} | {:<width$}", hash, file_name, width = max_name_len);
+        println!("| {:<hash_len$} | {:<width$}", hash, file_name, width = max_name_len);
     }
 
     Ok(())
