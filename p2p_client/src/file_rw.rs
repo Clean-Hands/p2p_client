@@ -1,48 +1,48 @@
 //! file_rw.rs
 //! by Lazuli Kleinhans, Ruben Boero
-//! May 6th, 2025
+//! May 17th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
-use std::io::{self, Read, Bytes};
+use std::io::{Bytes, Read};
 use std::path::PathBuf;
 
+
+
 /// Return a `Vec<u8>` filled with ALL of the bytes of the passed file name
-/// 
+///
 /// If you don't want to read in all of the bytes at once, consider using `open_iterable_file()`
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust
 /// let bytes = match read_file_bytes(&String::from("test.txt")) {
 ///     Ok(b) => b,
 ///     Err(e) => eprintln!("{e}")
 /// };
 /// ```
-#[allow(dead_code)]
 pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
     match fs::read(file_path) {
         Ok(d) => Ok(d),
-        Err(e) => {
-            Err(format!("Unable to read in file: {e}"))
-        }
+        Err(e) => Err(format!("Unable to read in file: {e}"))
     }
 }
 
 
+
 /// Returns an iterable `Bytes<File>` object that can get a file's bytes one by one
-/// 
+///
 /// Useful if you don't want to read in all bytes at once or be able to
 /// pause and continue reading bytes without losing your place in the file
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust
 /// let bytes = match open_iterable_file(&String::from("test.txt")) {
 ///     Ok(b) => b,
 ///     Err(e) => eprintln!("Failed to open file: {e}");
 /// };
-/// 
+///
 /// for byte in bytes {
 ///     match byte {
 ///         Ok(b) => println!("{b}"),
@@ -53,44 +53,42 @@ pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
 pub fn open_iterable_file(file_path: &PathBuf) -> Result<Bytes<File>, String> {
     let f = match File::open(file_path) {
         Ok(f) => f,
-        Err(e) => {
-            return Err(format!("Couldn't open file: {e}"));
-        }
+        Err(e) => return Err(format!("Couldn't open file: {e}"))
     };
     return Ok(f.bytes());
 }
 
 
+
 /// Writes all passed bytes to the passed file, and closes the file
-/// 
+///
 /// If you want to write bytes in multiple bursts, consider using `open_writable_file()`
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust
 /// if let Err(e) = write_file_bytes(&String::from("test.txt"), vec![104, 101, 108, 108, 111]) {
 ///     eprintln!("{e}")
 /// }
 /// ```
-/// 
+///
 #[allow(dead_code)]
-pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), String>{
+pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), String> {
     match fs::write(file_path, bytes) {
         Ok(_) => Ok(()),
-        Err(e) => {
-            Err(format!("Failed to write bytes to file: {e}"))
-        }
+        Err(e) => Err(format!("Failed to write bytes to file: {e}"))
     }
 }
 
 
+
 /// Returns a `File` object that bytes can be written to in multiple bursts
-/// 
+///
 /// Useful if you don't want to write all bytes at once or be able to
 /// pause and continue writing bytes without losing your place in the file
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust
 /// let mut file = match open_writable_file(&String::from("test.txt")) {
 ///     Ok(f) => f,
@@ -113,27 +111,6 @@ pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
     }
 }
 
-
-
-#[allow(dead_code)]
-pub fn rename_file(file: &mut File, new_file_name: &PathBuf) -> Result<File, String> {
-    let mut new_file = match open_writable_file(new_file_name) {
-        Ok(f) => f,
-        Err(e) => return Err(format!("Failed to create new file to copy data into: {e}"))
-    };
-
-    // TODO: figure out a way to ensure that the number of bytes copied is equal to the
-    //       number of bytes within the original file
-    if let Err(e) = io::copy(file, &mut new_file) {
-        return Err(format!("Unable to copy data to new file: {e}"))
-    };
-
-    Ok(new_file)
-}
-
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,18 +126,17 @@ mod tests {
         let actual_data = read_file_bytes(&test_file_name);
 
         assert_eq!(actual_data, Ok(expected_data));
- 
+
         // cleanup
         fs::remove_file(test_file_name).expect("Failed to remove file");
     }
-
 
     #[test]
     fn test_open_iterable_file_and_read_correct_bytes() {
         // let test_file_name = "test_open_iterable_file.txt".to_string();
         let test_file_name = PathBuf::from("test_open_iterable_file.txt");
         let expected_data = b"Ruben said Lazuli was here :)".to_vec();
-        
+
         if let Err(e) = write_file_bytes(&test_file_name, &expected_data) {
             panic!("{e}")
         }
@@ -174,7 +150,7 @@ mod tests {
         for byte in bytes {
             match byte {
                 Ok(b) => actual_data.push(b),
-                Err(e) => panic!("Unable to read next byte: {e}"),
+                Err(e) => panic!("Unable to read next byte: {e}")
             }
         }
 
@@ -182,7 +158,6 @@ mod tests {
 
         fs::remove_file(test_file_name).expect("Failed to remove file");
     }
-
 
     #[test]
     fn test_open_writable_file_and_write_bytes() {
@@ -211,15 +186,13 @@ mod tests {
         fs::remove_file(test_file_name).expect("Failed to remove file");
     }
 
-
     #[test]
     fn test_read_from_nonexistent_file() {
         let nonexistent_file = PathBuf::from("i_dont_exist.txt");
-        if let Ok(d) = read_file_bytes(&nonexistent_file) {  
+        if let Ok(d) = read_file_bytes(&nonexistent_file) {
             panic!("Was able to read data from nonexistent file: {:?}", d);
         };
     }
-
 
     #[test]
     fn test_write_to_nonexistent_dir() {
@@ -228,10 +201,10 @@ mod tests {
         let nonexistent_path = PathBuf::from("nonexistent_dir/neither_do_i.txt");
         let to_write = b"i will never be written to a file bc of the bad path".to_vec();
 
-        if let Ok(()) = write_file_bytes(&nonexistent_path, &to_write) {  
+        if let Ok(()) = write_file_bytes(&nonexistent_path, &to_write) {
             panic!("Was able to write data to nonexistent file.");
         };
-        
+
         // check the file was not created
         assert!(!Path::new(&nonexistent_path).exists());
     }

@@ -1,34 +1,33 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 16th, 2025
+//! May 17th, 2025
 //! CS347 Advanced Software Design
 
-use std::net::{TcpStream, TcpListener};
-use std::io::{Write, Read};
-use std::path::{Path, PathBuf};
-use std::fs::{self, File};
-use std::collections::HashMap;
-use tokio::runtime::Runtime;
-use sha2::digest::generic_array::{GenericArray, typenum::U12};
-use x25519_dalek::{EphemeralSecret, PublicKey};
-use aes_gcm::{
-    aead::{KeyInit, OsRng},
-    Aes256Gcm, Key
-};
-use hex;
-use directories::ProjectDirs;
 use crate::encryption;
-use crate::packet;
 use crate::file_rw;
+use crate::packet;
+use aes_gcm::{
+    Aes256Gcm, Key,
+    aead::{KeyInit, OsRng},
+};
+use directories::ProjectDirs;
+use hex;
+use sha2::digest::generic_array::{GenericArray, typenum::U12};
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use tokio::runtime::Runtime;
+use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type CatalogMap = HashMap<String, String>; // hash is key, absolute file path is value
 
-
 /// Gets the path to the catalog. If catalog doesn't exist, a new one is created.
-/// The catalog is stored in a static directory. 
-/// 
+/// The catalog is stored in a static directory.
+///
 /// The location of static directory depends on the OS:
-/// 
+///
 /// Linux: `/home/[user]/.local/share/p2p_client`
 /// macOS: `/Users/[user]/Library/Application Support/com.LLR.p2p_client`
 /// Windows: `C:\Users\[user]\AppData\Roaming\LLR\p2p_client\data`
@@ -49,6 +48,7 @@ fn get_catalog_path() -> Result<PathBuf, String> {
 }
 
 
+
 /// Returns catalog as Vector of bytes given the absolute path to it
 fn get_serialized_catalog(catalog_path: &PathBuf) -> Result<Vec<u8>, String> {
     if catalog_path.exists() {
@@ -66,6 +66,7 @@ fn get_serialized_catalog(catalog_path: &PathBuf) -> Result<Vec<u8>, String> {
         }
     }
 }
+
 
 
 /// Returns catalog as Hashmap given the absolute path to it.
@@ -92,8 +93,9 @@ fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String
         catalog = empty_catg;
     }
 
-    return Ok(catalog)
+    return Ok(catalog);
 }
+
 
 
 /// Writes changes made to catalog. If there is not file at the given path, will create a file an populate it with a bare json list: {}
@@ -118,7 +120,8 @@ fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result
 }
 
 
-/// Given a file path as input, computes hash of the file, then stores the hash and absolute file path in 
+
+/// Given a file path as input, computes hash of the file, then stores the hash and absolute file path in
 /// catalog.json found in a static directory. See get_catalog_path() for catalog directory locations
 pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
@@ -135,7 +138,7 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
         Ok(p) => p,
         Err(e) => return Err(format!("Unable to get the requested file's absolute path: {e}"))
     };
-    
+
     // get hash of file
     let file_bytes = match file_rw::read_file_bytes(&absolute_file_path) {
         Ok(b) => b,
@@ -146,7 +149,7 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 
     // Ruben doesn't think this is the behavior we want. I think we want the value to be updated,
     // otherwise if you want to change the file path you need to call remove, then add
-    
+
     // check if this file is already in catalog
     // checks by hash, not file name, so two files with the same name but different content can coexist
     // if catalog.contains_key(&file_hash_string) {
@@ -162,12 +165,14 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     }
 
     println!("Successfully added {file_path} ({file_hash_string}) to catalog");
-    
+
     Ok(())
 }
 
+
+
 /// Given a file hash as input, removes the associated entry from the catalog
-/// 
+///
 /// If the input hash is `DELETE-ALL` then all entries in the catalog will be removed
 pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
@@ -188,7 +193,8 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
             None => println!("Entry \"{hash}\" does not exist in catalog"),
             Some(f) => {
                 let file_name = PathBuf::from(f).file_name().unwrap().to_string_lossy().into_owned();
-                println!("Successfully removed {file_name} ({hash}) from catalog")}
+                println!("Successfully removed {file_name} ({hash}) from catalog")
+            }
         };
     }
 
@@ -200,7 +206,9 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
     Ok(())
 }
 
-// Displays the contents of the catalog
+
+
+/// Displays the contents of the user's local catalog
 pub fn view_catalog() -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
@@ -235,14 +243,17 @@ pub fn view_catalog() -> Result<(), String> {
 
     // print table header
     println!(
-        "| {:<hash_len$} | {:<width$}",
+        "| {:<hash_len$} | {:<max_name_len$}",
         "SHA-256 Hash",
-        "File Name",
-        width = max_name_len
+        "File Name"
     );
 
     // 2 gives space for the bar separating hash and path
-    println!("|{}|{}", "=".repeat(2 + hash_len), "=".repeat(2 + max_name_len));
+    println!(
+        "|{}|{}",
+        "=".repeat(2 + hash_len),
+        "=".repeat(2 + max_name_len)
+    );
 
     // print each catalog entry
     for (hash, path) in catalog.iter() {
@@ -251,16 +262,20 @@ pub fn view_catalog() -> Result<(), String> {
             .and_then(|os_str| os_str.to_str())
             .unwrap_or("invalid UTF-8");
 
-        println!("| {:<hash_len$} | {:<width$}", hash, file_name, width = max_name_len);
+        println!(
+            "| {:<hash_len$} | {:<max_name_len$}",
+            hash,
+            file_name
+        );
     }
 
     Ok(())
 }
 
 
+
 /// Returns the absolute file path of a file (from the catalog) given its hash
 pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
-
     // load existing catalog or create a new one
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
@@ -277,14 +292,19 @@ pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
         Some(f) => f.to_owned(),
         None => return Err(format!("Requested file does not exist in catalog"))
     };
-    
-    return Ok(PathBuf::from(file_name))
+
+    Ok(PathBuf::from(file_name))
 }
 
 
+
 /// Send a file name and its hash to the requesting TcpStream
-fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: &mut [u8; 12], mut stream: &mut TcpStream) -> Result<(), String> {
-    
+fn send_file_name_and_hash(
+    file_path: &PathBuf,
+    cipher: &Aes256Gcm,
+    mut nonce: &mut [u8; 12],
+    mut stream: &mut TcpStream,
+) -> Result<(), String> {
     // send file name
     match file_path.file_name() {
         Some(f) => {
@@ -307,13 +327,13 @@ fn send_file_name_and_hash(file_path: &PathBuf, cipher: &Aes256Gcm, mut nonce: &
         return Err(format!("Unable to send hash: {e}"));
     }
 
-    return Ok(())
+    Ok(())
 }
+
 
 
 /// An asynchronous task that handles sending a file over `stream`
 pub async fn start_sender_task(mut stream: TcpStream) {
-
     // println!("Connecting to {:?}...", stream.peer_addr().unwrap());
 
     // carry out DH exchange
@@ -340,7 +360,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
             return;
         }
     };
-    
+
     let peer_public_key = PublicKey::from(public_key_bytes);
 
     // compute and save shared secret
@@ -350,7 +370,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     let key = Key::<Aes256Gcm>::from_slice(dh_shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
     let mut initial_nonce = [0u8; 12];
-    
+
     println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
 
     // listen for the mode packet sent
@@ -395,14 +415,19 @@ pub async fn start_sender_task(mut stream: TcpStream) {
         Ok(_) => {},
         Err(e) => {
             eprintln!("Failed to read mode: {e}");
-            return
+            return;
         }
     }
 }
 
 
+
 /// Handles sending listener's catalog to requester
-fn fulfill_catalog_request(stream: &mut TcpStream, initial_nonce: &mut[u8; 12], cipher: &Aes256Gcm) -> Result<(), String> {
+fn fulfill_catalog_request(
+    stream: &mut TcpStream,
+    initial_nonce: &mut [u8; 12],
+    cipher: &Aes256Gcm,
+) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
         Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
@@ -422,14 +447,19 @@ fn fulfill_catalog_request(stream: &mut TcpStream, initial_nonce: &mut[u8; 12], 
 }
 
 
+
 /// Handles sending requested file to requester
-fn fulfill_file_request(mut stream: &mut TcpStream, mut initial_nonce: &mut[u8; 12], cipher: &Aes256Gcm) -> Result<(), String> {
+fn fulfill_file_request(
+    mut stream: &mut TcpStream,
+    mut initial_nonce: &mut [u8; 12],
+    cipher: &Aes256Gcm,
+) -> Result<(), String> {
     // listen for hash of file to send
     let mut buffer = [0u8; packet::PACKET_SIZE + 16];
     if let Err(e) = stream.read(&mut buffer) {
         return Err(format!("Failed to read hash from stream: {e}"));
     }
-    
+
     let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
     let file_hash_packet = match encryption::decrypt_message(&nonce, cipher, &buffer) {
         Ok(h) => h,
@@ -470,7 +500,7 @@ fn fulfill_file_request(mut stream: &mut TcpStream, mut initial_nonce: &mut[u8; 
 
     println!("Beginning to send {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
 
-    // write packets until EOF 
+    // write packets until EOF
     loop {
         let mut write_bytes: Vec<u8> = vec![];
         // subtract 2 for the data_length bytes
@@ -499,18 +529,19 @@ fn fulfill_file_request(mut stream: &mut TcpStream, mut initial_nonce: &mut[u8; 
 }
 
 
+
 pub fn start_listening() {
     // Create and enter a new async runtime
     let runtime = Runtime::new().expect("Failed to create a runtime");
     let _ = runtime.enter();
-    
+
     println!("Starting listener...");
     let listen_addr = String::from("0.0.0.0:7878");
     let listener = match TcpListener::bind(&listen_addr) {
         Ok(l) => {
             println!("Client listening on {}", &listen_addr);
             l
-        }
+        },
         Err(e) => {
             eprintln!("Failed to bind: {}", e);
             return;
@@ -529,7 +560,7 @@ pub fn start_listening() {
         };
 
         // println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
-    
+
         // spawn a new task for each incoming stream to handle more than one connection
         runtime.spawn(start_sender_task(stream));
     }

@@ -1,35 +1,35 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 16th, 2025
+//! May 17th, 2025
 //! CS347 Advanced Software Design
 
-use std::net::TcpStream;
-use std::io::{Write, Read};
-use std::thread::sleep;
-use std::time::Duration;
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
-use sha2::digest::generic_array::{GenericArray, typenum::U12};
-use x25519_dalek::{EphemeralSecret, PublicKey};
+use crate::encryption;
+use crate::file_rw;
+use crate::packet;
 use aes_gcm::{
+    Aes256Gcm, Key,
     aead::{KeyInit, OsRng},
-    Aes256Gcm, Key
 };
 use directories::ProjectDirs;
-use std::fs::{self, File};
 use hex;
-use crate::encryption;
-use crate::packet;
-use crate::file_rw;
+use sha2::digest::generic_array::{GenericArray, typenum::U12};
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::net::TcpStream;
+use std::path::{Path, PathBuf};
+use std::thread::sleep;
+use std::time::Duration;
+use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type CatalogMap = HashMap<String, String>;
 type PeerMap = HashMap<String, String>;
 
 /// Gets the path to the list of peers. If catalog doesn't exist, a new one is created.
-/// The list is stored in a static directory. 
-/// 
+/// The list is stored in a static directory.
+///
 /// The location of static directory depends on the OS:
-/// 
+///
 /// Linux: `/home/[user]/.local/share/p2p_client`
 /// macOS: `/Users/[user]/Library/Application Support/com.LLR.p2p_client`
 /// Windows: `C:\Users\[user]\AppData\Roaming\LLR\p2p_client\data`
@@ -75,7 +75,7 @@ fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<CatalogMap, St
         peer_list = empty_list;
     }
 
-    return Ok(peer_list)
+    return Ok(peer_list);
 }
 
 
@@ -108,12 +108,12 @@ fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Res
 pub fn add_ip_to_peers(peer_addr: &String, alias: &String) -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
+        Err(e) => return Err(format!("Failed to retreive peer list path: {e}")),
     };
 
     let mut peer_list = match get_deserialized_peer_list(&peer_list_path) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}")),
     };
 
     // add/update entry in peer_list
@@ -124,24 +124,24 @@ pub fn add_ip_to_peers(peer_addr: &String, alias: &String) -> Result<(), String>
     }
 
     println!("Successfully added {alias} ({peer_addr}) to peer list");
-    
+
     Ok(())
 }
 
 
 
 /// Given an IP as input, removes the associated entry from the peer list
-/// 
+///
 /// If the input IP is `DELETE-ALL` then all entries in the catalog will be removed
 pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
+        Err(e) => return Err(format!("Failed to retreive peer list path: {e}")),
     };
 
     let mut peer_list = match get_deserialized_peer_list(&peer_list_path) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}")),
     };
 
     if peer_addr == "DELETE-ALL" {
@@ -152,8 +152,8 @@ pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
             None => println!("Entry \"{peer_addr}\" does not exist in catalog"),
             Some(f) => {
                 let alias = String::from(f);
-                // .unwrap().to_string_lossy().into_owned();
-                println!("Successfully removed {alias} ({peer_addr}) from catalog")}
+                println!("Successfully removed {alias} ({peer_addr}) from catalog")
+            }
         };
     }
 
@@ -208,8 +208,12 @@ pub fn view_peer_list() -> Result<(), String> {
         width = max_alias_len
     );
 
-    // 2 gives space for the bar separating hash and path
-    println!("|{}|{}", "=".repeat(2 + max_ip_len), "=".repeat(2 + max_alias_len));
+    // 2 gives space for the bar separating IP and alias
+    println!(
+        "|{}|{}",
+        "=".repeat(2 + max_ip_len),
+        "=".repeat(2 + max_alias_len)
+    );
 
     // print each catalog entry
     for (hash, path) in peer_list.iter() {
@@ -218,7 +222,12 @@ pub fn view_peer_list() -> Result<(), String> {
             .and_then(|os_str| os_str.to_str())
             .unwrap_or("invalid UTF-8");
 
-        println!("| {:<max_ip_len$} | {:<width$}", hash, file_name, width = max_alias_len);
+        println!(
+            "| {:<max_ip_len$} | {:<width$}",
+            hash,
+            file_name,
+            width = max_alias_len
+        );
     }
 
     Ok(())
@@ -226,10 +235,9 @@ pub fn view_peer_list() -> Result<(), String> {
 
 
 
-/// ping an address to check that it is online. If TCP stream is established, stream is closed, 
+/// ping an address to check that it is online. If TCP stream is established, stream is closed,
 /// and Ok is returned. If TCP stream is not established, Err is returned.
 pub fn ping_addr(addr: &String) -> Result<String, String> {
-
     let send_addr = format!("{addr}:7878");
 
     println!("Attempting to ping {send_addr}");
@@ -250,10 +258,10 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 
     let cipher = match perform_dh_handshake(&stream) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Diffie-Hellman handshake failed: {e}"))
+        Err(e) => return Err(format!("Diffie-Hellman handshake failed: {e}")),
     };
     let mut initial_nonce: [u8; 12] = [0; 12];
-    
+
     // send mode packet
     let req_catalog_packet = packet::encode_packet(String::from("request_catalog").into_bytes());
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, req_catalog_packet) {
@@ -308,7 +316,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 
     if catalog.is_empty() {
         println!("Sender's catalog is empty.");
-        return Ok(())
+        return Ok(());
     }
 
     // dynamically determine max len name
@@ -332,9 +340,13 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
         "File Name",
         width = max_name_len
     );
-    
+
     // 2 gives space for the bar separating hash and path
-    println!("|{}|{}", "=".repeat(2 + hash_len), "=".repeat(2 + max_name_len));
+    println!(
+        "|{}|{}",
+        "=".repeat(2 + hash_len),
+        "=".repeat(2 + max_name_len)
+    );
 
     for (hash, path) in catalog {
         let file_name = Path::new(&path)
@@ -342,7 +354,12 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
             .and_then(|os| os.to_str())
             .unwrap_or("invalid UTF-8");
 
-        println!("| {:<hash_len$} | {:<width$}", hash, file_name, width = max_name_len);
+        println!(
+            "| {:<hash_len$} | {:<width$}",
+            hash,
+            file_name,
+            width = max_name_len
+        );
     }
 
     Ok(())
@@ -351,10 +368,14 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 
 
 /// Receives file name and file hash from the sender
-fn await_file_name_and_hash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stream: &TcpStream) -> Result<(String, Vec<u8>), String> {
+fn await_file_name_and_hash(
+    cipher: &Aes256Gcm,
+    initial_nonce: &mut [u8; 12],
+    mut stream: &TcpStream,
+) -> Result<(String, Vec<u8>), String> {
     // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext
     let mut buffer = [0u8; packet::PACKET_SIZE + 16];
-    
+
     // listen for file name
     if let Err(e) = stream.read(&mut buffer) {
         return Err(format!("Failed to read from stream: {e}"));
@@ -363,17 +384,16 @@ fn await_file_name_and_hash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mu
     let file_path = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
         Ok(fp) => fp,
         Err(e) => {
-            return Err(format!("Failed to decrypt ciphertext: {e}"));            
+            return Err(format!("Failed to decrypt ciphertext: {e}"));
         }
     };
     encryption::increment_nonce(initial_nonce);
     let file_path_packet = match packet::decode_packet(file_path) {
         Ok(p) => p,
-        Err(e) => return Err(format!("Unable to decode packet: {e}"))
+        Err(e) => return Err(format!("Unable to decode packet: {e}")),
     };
     let file_path = String::from_utf8_lossy(file_path_packet.data.as_slice());
 
-    
     // listen for the filehash
     if let Err(e) = stream.read(&mut buffer) {
         return Err(format!("Failed to read from stream: {e}"));
@@ -382,7 +402,7 @@ fn await_file_name_and_hash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mu
     let file_hash = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
         Ok(h) => h,
         Err(e) => {
-            return Err(format!("Failed to decrypt ciphertext: {e}"));             
+            return Err(format!("Failed to decrypt ciphertext: {e}"));
         }
     };
     encryption::increment_nonce(initial_nonce);
@@ -396,14 +416,19 @@ fn await_file_name_and_hash(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mu
 
 
 /// Takes a stream opened by a TcpListener and handles incoming packets
-fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stream: TcpStream, mut save_path: PathBuf) -> Result<(), String> {    
-    // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so   
+fn save_incoming_file(
+    cipher: &Aes256Gcm,
+    initial_nonce: &mut [u8; 12],
+    mut stream: TcpStream,
+    mut save_path: PathBuf,
+) -> Result<(), String> {
+    // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so
     // buffer needs to be PACKET_SIZE + 16 bytes in size
-    let mut buffer = [0u8; packet::PACKET_SIZE+16];
+    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
 
     let file_name_and_hash = match await_file_name_and_hash(&cipher, initial_nonce, &stream) {
         Ok(output) => output,
-        Err(e) => return Err(e)
+        Err(e) => return Err(e),
     };
 
     let file_name = file_name_and_hash.0;
@@ -411,11 +436,11 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
     println!("Beginning to download \"{file_name}\"...");
 
     save_path.push(&file_name);
-    
+
     // read file
     let mut file = match file_rw::open_writable_file(&save_path) {
         Ok(f) => f,
-        Err(e) => return Err(e)
+        Err(e) => return Err(e),
     };
 
     // read bytes until peer disconnects
@@ -432,10 +457,10 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
 
                 let hash_bytes = match file_rw::read_file_bytes(&save_path) {
                     Ok(hb) => hb,
-                    Err(e) => return Err(e)
+                    Err(e) => return Err(e),
                 };
                 let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
-                
+
                 if computed_file_hash != file_hash {
                     return Err(String::from("Failed to verify file hash. File not received correctly."))
                 } else {
@@ -444,35 +469,30 @@ fn save_incoming_file(cipher: &Aes256Gcm, initial_nonce: &mut [u8; 12], mut stre
                 return Ok(());
             }
             Ok(_) => (),
-            Err(e) => {
-                return Err(format!("Failed to read from stream: {e}"))
-            }
+            Err(e) => return Err(format!("Failed to read from stream: {e}")),
         };
 
         // decrypt
         let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
         let plaintext = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
             Ok(p) => p,
-            Err(e) => {
-                return Err(format!("Failed to decrypt ciphertext: {e}"))
-                
-            }
+            Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}")),
         };
         encryption::increment_nonce(initial_nonce);
 
         let received_packet = match packet::decode_packet(plaintext) {
             Ok(p) => p,
-            Err(e) => return Err(format!("Unable to decode packet: {e}"))
+            Err(e) => return Err(format!("Unable to decode packet: {e}")),
         };
-        
+
         let data_bytes = received_packet.data.len();
         match file.write(&received_packet.data) {
             Ok(n) => {
                 if n != data_bytes {
                     return Err(format!("Read {data_bytes} file bytes from stream, was only able to write {n} bytes to file"))
                 }
-            },
-            Err(e) => return Err(format!("Failed to write byte to file: {e}"))
+            }
+            Err(e) => return Err(format!("Failed to write byte to file: {e}")),
         }
     }
 }
@@ -505,16 +525,15 @@ fn perform_dh_handshake(mut stream: &TcpStream) -> Result<Aes256Gcm, String> {
 
 
 /// Connects a `TcpStream` object to the address `[send_ip]:7878` and returns said object.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust
 /// let addr = String::from("127.0.0.1");
 /// let stream: TcpStream = connect_stream(&addr);
 /// stream.write_all("Hello, world!".as_bytes());
 /// ```
 fn connect_stream(addr: &String) -> TcpStream {
-
     let send_addr = format!("{addr}:7878");
     // loop until connection is successful
     loop {
@@ -523,7 +542,7 @@ fn connect_stream(addr: &String) -> TcpStream {
             Ok(s) => {
                 println!("Connected to {send_addr}");
                 return s;
-            },
+            }
             Err(e) => {
                 eprintln!("Failed to connect to {send_addr}: {e}");
                 sleep(Duration::from_secs(1));
@@ -536,9 +555,8 @@ fn connect_stream(addr: &String) -> TcpStream {
 
 /// Send a request for a file by its `hash` to the IP `addr`, saving it in `file_path`
 pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
-
     let mut stream = connect_stream(&addr);
-    
+
     let cipher = match perform_dh_handshake(&stream) {
         Ok(c) => c,
         Err(e) => {

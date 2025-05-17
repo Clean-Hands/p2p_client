@@ -1,6 +1,6 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! May 16th, 2025
+//! May 17th, 2025
 //! CS347 Advanced Software Design
 
 use clap::{Parser, Subcommand};
