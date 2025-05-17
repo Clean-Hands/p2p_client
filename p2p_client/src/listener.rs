@@ -12,7 +12,6 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
-use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -369,7 +368,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     // generate and store AES cipher
     let key = Key::<Aes256Gcm>::from_slice(dh_shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
-    let mut initial_nonce = [0u8; 12];
+    let mut nonce = [0u8; 12];
 
     println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
 
@@ -380,15 +379,13 @@ pub async fn start_sender_task(mut stream: TcpStream) {
         return;
     }
 
-    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(&initial_nonce);
-    let mode_packet = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
+    let mode_packet = match encryption::decrypt_message(&mut nonce, &cipher, &buffer) {
         Ok(h) => h,
         Err(e) => {
             eprintln!("Failed to decrypt ciphertext of mode packet: {e}");
             return;
         }
     };
-    encryption::increment_nonce(&mut initial_nonce);
 
     let mode_packet = match packet::decode_packet(mode_packet) {
         Ok(p) => p,
@@ -402,13 +399,13 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     match String::from_utf8(mode_packet.data) {
         Ok(m) if m == "request_catalog" => {
             println!("Request catalog mode");
-            if let Err(e) = fulfill_catalog_request(&mut stream, &mut initial_nonce, &cipher) {
+            if let Err(e) = fulfill_catalog_request(&mut stream, &mut nonce, &cipher) {
                 eprintln!("Failed to fulfill catalog request: {e}");
             }
         },
         Ok(m) if m == "request_file" => {
             println!("Request file mode");
-            if let Err(e) = fulfill_file_request(&mut stream, &mut initial_nonce, &cipher) {
+            if let Err(e) = fulfill_file_request(&mut stream, &mut nonce, &cipher) {
                 eprintln!("Failed to fulfill file request: {e}");
             }
         },
@@ -425,7 +422,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
 /// Handles sending listener's catalog to requester
 fn fulfill_catalog_request(
     stream: &mut TcpStream,
-    initial_nonce: &mut [u8; 12],
+    nonce: &mut [u8; 12],
     cipher: &Aes256Gcm,
 ) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
@@ -439,7 +436,7 @@ fn fulfill_catalog_request(
     };
 
     let message = packet::encode_packet(catalog);
-    if let Err(e) = encryption::send_to_connection(stream, initial_nonce, cipher, message) {
+    if let Err(e) = encryption::send_to_connection(stream, nonce, cipher, message) {
         return Err(format!("Failed to send catalog: {e}"));
     }
 
@@ -451,7 +448,7 @@ fn fulfill_catalog_request(
 /// Handles sending requested file to requester
 fn fulfill_file_request(
     mut stream: &mut TcpStream,
-    mut initial_nonce: &mut [u8; 12],
+    mut nonce: &mut [u8; 12],
     cipher: &Aes256Gcm,
 ) -> Result<(), String> {
     // listen for hash of file to send
@@ -460,14 +457,12 @@ fn fulfill_file_request(
         return Err(format!("Failed to read hash from stream: {e}"));
     }
 
-    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
-    let file_hash_packet = match encryption::decrypt_message(&nonce, cipher, &buffer) {
+    let file_hash_packet = match encryption::decrypt_message(nonce, cipher, &buffer) {
         Ok(h) => h,
         Err(e) => {
             return Err(format!("Failed to decrypt ciphertext: {e}"));
         }
     };
-    encryption::increment_nonce(initial_nonce);
 
     let file_hash_packet = match packet::decode_packet(file_hash_packet) {
         Ok(p) => p,
@@ -486,7 +481,7 @@ fn fulfill_file_request(
     };
 
     // send peer file name and hash to be able to know what to save it as and verify they got it correctly
-    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, initial_nonce, stream) {
+    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, nonce, stream) {
         return Err(format!("Failed to send file name and hash to peer: {e}"));
     }
 
@@ -512,7 +507,7 @@ fn fulfill_file_request(
                 None => {
                     // when trying to read the next byte, we read EOF so send the last packet and return
                     let message = packet::encode_packet(write_bytes);
-                    if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, message) { 
+                    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) { 
                         return Err(format!("Failed to send packet: {e}"));
                     }
                     println!("File {:?} successfully sent to {:?}", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
@@ -522,7 +517,7 @@ fn fulfill_file_request(
         }
         // encode the data and send the packet
         let message = packet::encode_packet(write_bytes);
-        if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, message) {
+        if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) {
             return Err(format!("{e}"));
         }
     }

@@ -5,7 +5,6 @@
 
 use crate::packet;
 use aes_gcm::{Aes256Gcm, Nonce, aead::Aead};
-use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use std::io::Write;
 use std::net::TcpStream;
 
@@ -13,7 +12,7 @@ use std::net::TcpStream;
 
 // TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
 /// increment the nonce within the struct
-pub fn increment_nonce(nonce: &mut [u8; 12]) {
+fn increment_nonce(nonce: &mut [u8; 12]) {
     let mut carry = true;
 
     for byte in nonce.iter_mut().rev() {
@@ -32,14 +31,17 @@ pub fn increment_nonce(nonce: &mut [u8; 12]) {
 
 /// encrypt message given nonce, cipher, and message
 pub fn encrypt_message(
-    nonce: &GenericArray<u8, U12>,
+    nonce: &mut [u8; 12],
     cipher: &Aes256Gcm,
     message: &[u8; packet::PACKET_SIZE],
 ) -> Result<Vec<u8>, String> {
-    match cipher.encrypt(&nonce, message.as_ref()) {
-        Ok(c) => return Ok(c),
+    let enc_nonce = Nonce::from_slice(nonce);
+    let ciphertext = match cipher.encrypt(&enc_nonce, message.as_ref()) {
+        Ok(c) => c,
         Err(e) => return Err(format!("Encryption failed: {}", e))
     };
+    increment_nonce(nonce);
+    Ok(ciphertext)
 }
 
 
@@ -49,21 +51,24 @@ pub fn encrypt_message(
 /// ciphertext is assumed to be 528 bytes because packet is always 512 bytes long & Aes256Gcm adds a 16
 /// byte verification tag
 pub fn decrypt_message(
-    nonce: &GenericArray<u8, U12>,
+    nonce: &mut [u8; 12],
     cipher: &Aes256Gcm,
     ciphertext: &[u8; packet::PACKET_SIZE + 16],
 ) -> Result<[u8; packet::PACKET_SIZE], String> {
-    match cipher.decrypt(&nonce, ciphertext.as_ref()) {
+    let denc_nonce = Nonce::from_slice(nonce);
+    let plaintext_as_array = match cipher.decrypt(&denc_nonce, ciphertext.as_ref()) {
         Ok(plaintext) => {
             // convert output of decrypt from vec to array so it plays nicely with decode function
             let mut plaintext_as_array = [0; packet::PACKET_SIZE];
             for i in 0..packet::PACKET_SIZE {
                 plaintext_as_array[i] = plaintext[i];
             }
-            Ok(plaintext_as_array)
+            plaintext_as_array
         },
-        Err(e) => Err(format!("Decryption failed {}", e))
-    }
+        Err(e) => return Err(format!("Decryption failed {}", e))
+    };
+    increment_nonce(nonce);
+    Ok(plaintext_as_array)
 }
 
 
@@ -76,16 +81,12 @@ pub fn send_to_connection(
     message: [u8; packet::PACKET_SIZE],
 ) -> Result<(), String> {
     // encrypt message
-    let enc_nonce = Nonce::from_slice(nonce);
     // this function call assumes that cipher is Some type, still need to check that cipher
     // is initialized correctly in start_sender_task
-    let ciphertext = match encrypt_message(&enc_nonce, cipher, &message) {
+    let ciphertext = match encrypt_message(nonce, cipher, &message) {
         Ok(c) => c,
         Err(e) => return Err(format!("Encryption failed: {e}"))
     };
-
-    // increment nonce outside scope of function
-    increment_nonce(nonce);
 
     if let Err(e) = stream.write_all(&ciphertext) {
         return Err(format!("Failed to write to stream: {e}"));

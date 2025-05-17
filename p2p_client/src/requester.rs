@@ -12,7 +12,6 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
-use sha2::digest::generic_array::{GenericArray, typenum::U12};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -240,12 +239,12 @@ pub fn view_peer_list() -> Result<(), String> {
 pub fn ping_addr(addr: &String) -> Result<String, String> {
     let send_addr = format!("{addr}:7878");
 
-    println!("Attempting to ping {send_addr}");
+    println!("Attempting to ping {send_addr}...");
 
     match TcpStream::connect(&send_addr) {
-        Ok(_) => return Ok(format!("'{addr}' is online!")),
+        Ok(_) => return Ok(format!("{addr} is online!")),
         Err(_) => {
-            return Err(format!("'{addr}' did not respond to ping"));
+            return Err(format!("{addr} did not respond to ping"));
         }
     };
 }
@@ -260,11 +259,11 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
         Ok(c) => c,
         Err(e) => return Err(format!("Diffie-Hellman handshake failed: {e}")),
     };
-    let mut initial_nonce: [u8; 12] = [0; 12];
+    let mut nonce: [u8; 12] = [0; 12];
 
     // send mode packet
     let req_catalog_packet = packet::encode_packet(String::from("request_catalog").into_bytes());
-    if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, req_catalog_packet) {
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet) {
         return Err(format!("Failed to send request for sender catalog {e}"));
     }
 
@@ -275,14 +274,12 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
         match stream.read(&mut buffer) {
             Ok(0) => break, // EOF
             Ok(_) => {
-                let nonce = GenericArray::clone_from_slice(&initial_nonce);
-                let decrypted = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
+                let decrypted = match encryption::decrypt_message(&mut nonce, &cipher, &buffer) {
                     Ok(p) => p,
                     Err(e) => {
                         return Err(format!("Failed to decrypt packet: {e}"));
                     }
                 };
-                encryption::increment_nonce(&mut initial_nonce);
 
                 let packet = match packet::decode_packet(decrypted) {
                     Ok(pkt) => pkt,
@@ -370,7 +367,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 /// Receives file name and file hash from the sender
 fn await_file_name_and_hash(
     cipher: &Aes256Gcm,
-    initial_nonce: &mut [u8; 12],
+    nonce: &mut [u8; 12],
     mut stream: &TcpStream,
 ) -> Result<(String, Vec<u8>), String> {
     // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext
@@ -380,14 +377,12 @@ fn await_file_name_and_hash(
     if let Err(e) = stream.read(&mut buffer) {
         return Err(format!("Failed to read from stream: {e}"));
     }
-    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
-    let file_path = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
+    let file_path = match encryption::decrypt_message(nonce, &cipher, &buffer) {
         Ok(fp) => fp,
         Err(e) => {
             return Err(format!("Failed to decrypt ciphertext: {e}"));
         }
     };
-    encryption::increment_nonce(initial_nonce);
     let file_path_packet = match packet::decode_packet(file_path) {
         Ok(p) => p,
         Err(e) => return Err(format!("Unable to decode packet: {e}")),
@@ -398,19 +393,17 @@ fn await_file_name_and_hash(
     if let Err(e) = stream.read(&mut buffer) {
         return Err(format!("Failed to read from stream: {e}"));
     }
-    let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
-    let file_hash = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
+    let file_hash = match encryption::decrypt_message(nonce, &cipher, &buffer) {
         Ok(h) => h,
         Err(e) => {
             return Err(format!("Failed to decrypt ciphertext: {e}"));
         }
     };
-    encryption::increment_nonce(initial_nonce);
     let file_hash = packet::decode_packet(file_hash);
     let file_hash_packet = file_hash.unwrap();
     let file_hash = file_hash_packet.data.as_slice();
 
-    return Ok((String::from(file_path), file_hash.to_vec()));
+    Ok((String::from(file_path), file_hash.to_vec()))
 }
 
 
@@ -418,7 +411,7 @@ fn await_file_name_and_hash(
 /// Takes a stream opened by a TcpListener and handles incoming packets
 fn save_incoming_file(
     cipher: &Aes256Gcm,
-    initial_nonce: &mut [u8; 12],
+    nonce: &mut [u8; 12],
     mut stream: TcpStream,
     mut save_path: PathBuf,
 ) -> Result<(), String> {
@@ -426,14 +419,14 @@ fn save_incoming_file(
     // buffer needs to be PACKET_SIZE + 16 bytes in size
     let mut buffer = [0u8; packet::PACKET_SIZE + 16];
 
-    let file_name_and_hash = match await_file_name_and_hash(&cipher, initial_nonce, &stream) {
+    let file_name_and_hash = match await_file_name_and_hash(&cipher, nonce, &stream) {
         Ok(output) => output,
         Err(e) => return Err(e),
     };
 
     let file_name = file_name_and_hash.0;
     let file_hash = file_name_and_hash.1;
-    println!("Beginning to download \"{file_name}\"...");
+    println!("Downloading \"{file_name}\"...");
 
     save_path.push(&file_name);
 
@@ -473,12 +466,10 @@ fn save_incoming_file(
         };
 
         // decrypt
-        let nonce: GenericArray<u8, U12> = GenericArray::clone_from_slice(initial_nonce);
-        let plaintext = match encryption::decrypt_message(&nonce, &cipher, &buffer) {
+        let plaintext = match encryption::decrypt_message(nonce, &cipher, &buffer) {
             Ok(p) => p,
             Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}")),
         };
-        encryption::increment_nonce(initial_nonce);
 
         let received_packet = match packet::decode_packet(plaintext) {
             Ok(p) => p,
