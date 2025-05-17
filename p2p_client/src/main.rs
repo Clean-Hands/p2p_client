@@ -45,14 +45,14 @@ enum RequestCommand {
     Catalog { peer_address: String },
     #[command(about = "Check if a specific peer is available for requests")]
     Ping { peer_address: String },
-    #[command(about = "Add an IP and an optional alias to your list of available peers")]
+    #[command(about = "Add an IP and an optional alias to your list of known peers")]
     AddIP {
         peer_address: String,
         alias: Option<String>,
     },
-    #[command(about = "Remove an IP from your list of available peers")]
+    #[command(about = "Remove an IP from your list of known peers")]
     RemoveIP { peer_address: String },
-    #[command(about = "View your local list of IPs/peers")]
+    #[command(about = "View your local list of known peers")]
     ViewIPS {},
 }
 
