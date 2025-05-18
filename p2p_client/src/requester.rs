@@ -332,10 +332,9 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
     let hash_len = 64;
 
     println!(
-        "| {:<hash_len$} | {:<width$}",
+        "| {:<hash_len$} | {:<max_name_len$}",
         "SHA-256 Hash",
-        "File Name",
-        width = max_name_len
+        "File Name"
     );
 
     // 2 gives space for the bar separating hash and path
@@ -352,10 +351,9 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
             .unwrap_or("invalid UTF-8");
 
         println!(
-            "| {:<hash_len$} | {:<width$}",
+            "| {:<hash_len$} | {:<max_name_len$}",
             hash,
-            file_name,
-            width = max_name_len
+            file_name
         );
     }
 
