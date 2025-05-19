@@ -20,6 +20,8 @@ Right now, you can:
 ## How to Run
 Refer to the [running.md](https://github.com/rubenboero21/cs347/blob/main/doc/running.md) document.
 
+If you need to intall cargo, follow the instructions [here](https://www.rust-lang.org/tools/install), or refer to the [development.md](https://github.com/rubenboero21/cs347/blob/main/doc/development.md) file.
+
 ## Questions We Would Like Answered
 - Does the code organization/architecture make sense?
 - Does the documentation (both in the code and in the docs folder) make sense? 
