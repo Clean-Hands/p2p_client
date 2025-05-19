@@ -20,7 +20,7 @@ Right now, you can:
 ## How to Run
 Refer to the [running.md](https://github.com/rubenboero21/cs347/blob/main/doc/running.md) document.
 
-If you need to install cargo, run the curl command found [here](https://www.rust-lang.org/tools/install),  to the [development.md](https://github.com/rubenboero21/cs347/blob/main/doc/development.md) file, or follow more detailed instructions to install rustup [here](https://doc.rust-lang.org/book/ch01-01-installation.html).
+If you need to install cargo, run the curl command found [here](https://www.rust-lang.org/tools/install), refer to the [development.md](https://github.com/rubenboero21/cs347/blob/main/doc/development.md) file, or follow more detailed instructions to install rustup [here](https://doc.rust-lang.org/book/ch01-01-installation.html).
 
 ## Questions We Would Like Answered
 - Does the code organization/architecture make sense?
