@@ -1,5 +1,5 @@
 # development
 
-- [Install rust](https://www.rust-lang.org/tools/install)
+- [Install rust](https://www.rust-lang.org/tools/install) and other important tools via the curl command at the top of the page.
 - Clone [our repository](https://github.com/rubenboero21/cs347)
 - The [main file](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/main.rs) is a nice place to begin looking at the source code.
