@@ -568,7 +568,7 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         eprintln!("{e}");
         // TODO: find a better solution (request a packet again if it fails)
         //       this is just brute forcing the problem and terrible for huge files
-        request_file(addr, hash, file_path);
+        // request_file(addr, hash, file_path);
         return;
     }
 }
