@@ -566,7 +566,7 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         request_file(addr, hash, file_path);
         return;
     }
-    println!("File request sent...");
+    println!("File request sent");
 
 
     // start receiving file packets, saving it in the directory file_path
