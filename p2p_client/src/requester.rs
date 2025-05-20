@@ -14,7 +14,7 @@ use directories::ProjectDirs;
 use hex;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
@@ -425,8 +425,9 @@ fn save_incoming_file(
     // read bytes until peer disconnects
     loop {
         let mut buffer = [0u8; packet::PACKET_SIZE + 16];
-        match stream.read(&mut buffer) {
-            Ok(0) => {
+        match stream.read_exact(&mut buffer) {
+            Ok(_) => (),
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof =>  {
                 // End connection
                 println!("Peer {} disconnected", stream.peer_addr().unwrap());
 
@@ -448,10 +449,6 @@ fn save_incoming_file(
                 }
                 return Ok(());
             },
-            Ok(n) if n != buffer.len() => {
-                eprintln!("[WARNING] expected to read {} bytes from stream, only read {n}", buffer.len())
-            },
-            Ok(_) => (),
             Err(e) => return Err(format!("Failed to read from stream: {e}"))
         };
 
