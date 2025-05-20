@@ -402,10 +402,13 @@ fn save_incoming_file(
     // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so
     // buffer needs to be PACKET_SIZE + 16 bytes in size
 
+    println!("Waiting on file metadata...");
     let file_name_and_hash = match await_file_name_and_hash(&cipher, nonce, &stream) {
         Ok(output) => output,
         Err(e) => return Err(e)
     };
+    println!("File metadata received");
+
 
     let file_name = file_name_and_hash.0;
     let file_hash = file_name_and_hash.1;
@@ -563,6 +566,8 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         request_file(addr, hash, file_path);
         return;
     }
+    println!("File request sent...");
+
 
     // start receiving file packets, saving it in the directory file_path
     if let Err(e) = save_incoming_file(&cipher, &mut initial_nonce, stream, file_path.clone()) {
