@@ -1,6 +1,5 @@
 # development
 
-- [Install rust](https://www.rust-lang.org/tools/install) and other important tools via the curl command at the top of the page.
-  - More detailed instructions of how to install rustup can be found [here](https://doc.rust-lang.org/book/ch01-01-installation.html).
+- Install rust and other necessary tools by following [this guide](https://doc.rust-lang.org/book/ch01-01-installation.html).
 - Clone [our repository](https://github.com/rubenboero21/cs347)
 - The [main file](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/main.rs) is a nice place to begin looking at the source code.
