@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 19th, 2025
+//! May 20th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -401,7 +401,7 @@ fn save_incoming_file(
         Ok(f) => f,
         Err(e) => return Err(e)
     };
-    
+
     println!("Downloading \"{file_name}\"...");
 
     // read bytes until peer disconnects
@@ -418,6 +418,7 @@ fn save_incoming_file(
                     return Err(format!("Failed to ensure all data written to file: {e}"));
                 }
 
+                println!("Verifying file integrity...");
                 let hash_bytes = match file_rw::read_file_bytes(&save_path) {
                     Ok(hb) => hb,
                     Err(e) => return Err(e),
