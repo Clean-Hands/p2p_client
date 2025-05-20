@@ -251,6 +251,60 @@ pub fn ping_addr(addr: &String) -> Result<String, String> {
 
 
 
+/// Takes an opened TcpStream and performs the requester side of the Diffie-Hellman handshake
+fn perform_dh_handshake(mut stream: &TcpStream) -> Result<Aes256Gcm, String> {
+    // generate DH exchange info
+    let local_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
+    let local_public_key = PublicKey::from(&local_private_key);
+
+    // read public key from peer
+    let mut peer_public_key_bytes: [u8; 32] = [0; 32];
+    stream.read_exact(&mut peer_public_key_bytes).expect("Failed to read peer's public key");
+    let peer_public_key = PublicKey::from(peer_public_key_bytes);
+
+    // send local public key to peer
+    if let Err(e) = stream.write_all(local_public_key.as_bytes()) {
+        return Err(format!("Failed to send local public key: {e}"));
+    }
+
+    // generate AES cipher to decrypt messages
+    let shared_secret = local_private_key.diffie_hellman(&peer_public_key);
+    let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
+    let cipher = Aes256Gcm::new(key);
+    return Ok(cipher);
+}
+
+
+
+/// Connects a `TcpStream` object to the address `[addr]:7878` and returns said object.
+///
+/// # Example
+///
+/// ```rust
+/// let addr = String::from("127.0.0.1");
+/// let stream: TcpStream = connect_stream(&addr);
+/// stream.write_all("Hello, world!".as_bytes());
+/// ```
+fn connect_stream(addr: &String) -> TcpStream {
+    let send_addr = format!("{addr}:7878");
+    // loop until connection is successful
+    loop {
+        println!("Attempting to connect to {send_addr}...");
+        match TcpStream::connect(&send_addr) {
+            Ok(s) => {
+                println!("Connected to {send_addr}");
+                return s;
+            }
+            Err(e) => {
+                eprintln!("Failed to connect to {send_addr}: {e}");
+                sleep(Duration::from_secs(1));
+            }
+        };
+    }
+}
+
+
+
 /// Requests catalog from a given sender's IP address, then prints the contents of the catalog to stdout
 pub fn request_catalog(addr: &String) -> Result<(), String> {
     let mut stream = connect_stream(&addr);
@@ -358,9 +412,8 @@ fn await_file_name(
     nonce: &mut [u8; 12],
     mut stream: &TcpStream,
 ) -> Result<String, String> {
-    let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
-
     // listen for file name
+    let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
     if let Err(e) = stream.read(&mut buffer) {
         return Err(format!("Failed to read from stream: {e}"));
     }
@@ -420,8 +473,8 @@ fn save_incoming_file(
 
                 println!("Verifying file integrity...");
                 let hash_bytes = match file_rw::read_file_bytes(&save_path) {
-                    Ok(hb) => hb,
-                    Err(e) => return Err(e),
+                    Ok(b) => b,
+                    Err(e) => return Err(e)
                 };
                 let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
 
@@ -467,60 +520,6 @@ fn save_incoming_file(
 
 
 
-/// Takes an opened TcpStream and performs the requester side of the Diffie-Hellman handshake
-fn perform_dh_handshake(mut stream: &TcpStream) -> Result<Aes256Gcm, String> {
-    // generate DH exchange info
-    let local_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
-    let local_public_key = PublicKey::from(&local_private_key);
-
-    // read public key from peer
-    let mut peer_public_key_bytes: [u8; 32] = [0; 32];
-    stream.read_exact(&mut peer_public_key_bytes).expect("Failed to read peer's public key");
-    let peer_public_key = PublicKey::from(peer_public_key_bytes);
-
-    // send local public key to peer
-    if let Err(e) = stream.write_all(local_public_key.as_bytes()) {
-        return Err(format!("Failed to send local public key: {e}"));
-    }
-
-    // generate AES cipher to decrypt messages
-    let shared_secret = local_private_key.diffie_hellman(&peer_public_key);
-    let key = Key::<Aes256Gcm>::from_slice(shared_secret.as_bytes());
-    let cipher = Aes256Gcm::new(key);
-    return Ok(cipher);
-}
-
-
-
-/// Connects a `TcpStream` object to the address `[send_ip]:7878` and returns said object.
-///
-/// # Example
-///
-/// ```rust
-/// let addr = String::from("127.0.0.1");
-/// let stream: TcpStream = connect_stream(&addr);
-/// stream.write_all("Hello, world!".as_bytes());
-/// ```
-fn connect_stream(addr: &String) -> TcpStream {
-    let send_addr = format!("{addr}:7878");
-    // loop until connection is successful
-    loop {
-        println!("Attempting to connect to {send_addr}...");
-        match TcpStream::connect(&send_addr) {
-            Ok(s) => {
-                println!("Connected to {send_addr}");
-                return s;
-            }
-            Err(e) => {
-                eprintln!("Failed to connect to {send_addr}: {e}");
-                sleep(Duration::from_secs(1));
-            }
-        };
-    }
-}
-
-
-
 /// Send a request for a file by its `hash` to the IP `addr`, saving it in `file_path`
 pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
     let mut stream = connect_stream(&addr);
@@ -532,11 +531,11 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
             return;
         }
     };
-    let mut initial_nonce: [u8; 12] = [0; 12];
+    let mut nonce: [u8; 12] = [0; 12];
 
     // send mode packet
     let req_catalog_packet = packet::encode_packet(String::from("request_file").into_bytes());
-    if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, req_catalog_packet) {
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet) {
         eprintln!("Failed to send request for sender catalog {e}");
         return;
     }
@@ -545,24 +544,15 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
 
     // send file hash
     let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
-    if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, file_hash_packet) {
-        // if receiving a file fails in any way, try again
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet) {
         eprintln!("{e}");
-        // TODO: find a better solution (request a packet again if it fails)
-        //       this is just brute forcing the problem and terrible for huge files
-        request_file(addr, hash, file_path);
         return;
     }
     println!("File request sent");
 
 
     // start receiving file packets, saving it in the directory file_path
-    if let Err(e) = save_incoming_file(&cipher, &mut initial_nonce, stream, file_path.clone(), &hash) {
-        // if receiving a file fails in any way, try again
+    if let Err(e) = save_incoming_file(&cipher, &mut nonce, stream, file_path.clone(), &hash) {
         eprintln!("{e}");
-        // TODO: find a better solution (request a packet again if it fails)
-        //       this is just brute forcing the problem and terrible for huge files
-        // request_file(addr, hash, file_path);
-        return;
     }
 }
