@@ -1,6 +1,6 @@
 //! packet.rs
 //! by Ruben Boero, Liam Keane, Lazuli Kleinhans
-//! May 17th, 2025
+//! May 19th, 2025
 //! CS347 Advanced Software Design
 
 use byteorder::{BigEndian, ByteOrder};
@@ -13,28 +13,26 @@ pub const PACKET_SIZE: usize = 512;
 
 /// Packet struct to contain relevant items of our packet protocol
 ///
-/// packets are always 512 bytes long (padded with 0s as needed)
-///
-/// data length: the sum of all bytes in packet EXCEPT padding bytes
+/// `data_length`: the sum of all bytes in packet EXCEPT padding bytes
 #[derive(Default, Debug, PartialEq)]
 pub struct Packet {
     pub data_length: u16,
-    pub data: Vec<u8>, // up to PACKET_SIZE-2 (510) bytes
+    pub data: Vec<u8> // up to PACKET_SIZE-2 (510) bytes
 }
 
 
 
-/// given a vector of bytes, compute and return the sha256 hash
+/// Given a vector of bytes, compute and return the sha256 hash
 pub fn compute_sha256_hash(data: &Vec<u8>) -> Vec<u8> {
     return Sha256::digest(data).to_vec();
 }
 
 
 
-/// extract data from packet
+/// Extract data from an encoded packet
 ///
-/// returns Result type that contains Err if the chunk hash verification fails, and the created
-/// Packet struct otherwise
+/// Returns `Result` type that contains `Err` if the chunk hash verification fails 
+/// If it succeeds in decoding the packet, returns `Ok` with the created `Packet` struct
 pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> {
     let mut packet: Packet = Packet{..Default::default()};
     let mut offset = 0;
@@ -59,14 +57,13 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 
 
 
-/// wrap data in our packet protocol
+/// Encode data in our packet protocol
 ///
-/// input data: bytes that represent the chunk of the file being sent
+/// `data`: a `Vec<u8>` of bytes to be sent
 ///
-/// output: array of bytes to send
+/// Output: a properly formatted array of bytes to send
 // TODO: check that data doesn't exceed 510 bytes
 pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
-    // initialize packet array and offset
     let mut packet = [0u8; PACKET_SIZE];
     let mut offset = 0;
 
@@ -123,7 +120,7 @@ mod tests {
     fn test_decode_packet() {
         let expected = Packet {
             data_length: 13,
-            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
+            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1]
         };
 
         let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
@@ -144,10 +141,7 @@ mod tests {
 
         let result = packet::decode_packet(packet_bytes);
 
-        let expected_error = format!(
-            "Data length of '{}' is larger than maximum packet size of '{}'",
-            data_len, PACKET_SIZE
-        );
+        let expected_error = format!("Data length of '{data_len}' is larger than maximum packet size of '{PACKET_SIZE}'");
 
         assert_eq!(result, Err(expected_error));
     }
@@ -157,7 +151,7 @@ mod tests {
     fn test_unequal_packets() {
         let expected = Packet {
             data_length: 87,
-            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
+            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1]
         };
 
         let data = vec![10, 9, 8, 7, 6, 5, 4, 3, 2, 1];

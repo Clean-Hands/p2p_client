@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 17th, 2025
+//! May 19th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -23,6 +23,8 @@ use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type CatalogMap = HashMap<String, String>;
 type PeerMap = HashMap<String, String>;
+
+
 
 /// Gets the path to the list of peers. If catalog doesn't exist, a new one is created.
 /// The list is stored in a static directory.
@@ -58,12 +60,12 @@ fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<CatalogMap, St
     if peer_list_path.exists() {
         let serialized = match fs::read_to_string(&peer_list_path) {
             Ok(c) => c,
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(e.to_string())
         };
 
         let deserialized = match serde_json::from_str(&serialized) {
             Ok(d) => d,
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(e.to_string())
         };
 
         peer_list = deserialized;
@@ -84,12 +86,12 @@ fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Res
     // write updated peer list to peers.json
     let mut json_file = match File::create(peer_list_path) {
         Ok(f) => f,
-        Err(e) => return Err(format!("Failed to open peer list file: {e}")),
+        Err(e) => return Err(format!("Failed to open peer list file: {e}"))
     };
 
     let json = match serde_json::to_string_pretty(peer_list) {
         Ok(j) => j,
-        Err(e) => return Err(format!("Failed to serialize peer list: {e}")),
+        Err(e) => return Err(format!("Failed to serialize peer list: {e}"))
     };
 
     let write_result = json_file.write_all(json.as_bytes());
@@ -107,12 +109,12 @@ fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Res
 pub fn add_ip_to_peers(peer_addr: &String, alias: &String) -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retreive peer list path: {e}")),
+        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
     };
 
     let mut peer_list = match get_deserialized_peer_list(&peer_list_path) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retreive peer list: {e}")),
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
     };
 
     // add/update entry in peer_list
@@ -135,12 +137,12 @@ pub fn add_ip_to_peers(peer_addr: &String, alias: &String) -> Result<(), String>
 pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retreive peer list path: {e}")),
+        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
     };
 
     let mut peer_list = match get_deserialized_peer_list(&peer_list_path) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retreive peer list: {e}")),
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
     };
 
     if peer_addr == "DELETE-ALL" {
@@ -158,7 +160,7 @@ pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
 
     // write updated catalog to catalog.json
     if let Err(e) = write_updated_peer_list(&peer_list_path, &peer_list) {
-        return Err(format!("Error writing updated catalog: {}", e));
+        return Err(format!("Error writing updated catalog: {}", e))
     }
 
     Ok(())
@@ -170,12 +172,12 @@ pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
 pub fn view_peer_list() -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}")),
+        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}"))
     };
 
     let peer_list = match get_deserialized_peer_list(&peer_list_path) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retrieve peer list: {e}")),
+        Err(e) => return Err(format!("Failed to retrieve peer list: {e}"))
     };
 
     if peer_list.is_empty() {
@@ -234,7 +236,7 @@ pub fn view_peer_list() -> Result<(), String> {
 
 
 
-/// ping an address to check that it is online. If TCP stream is established, stream is closed,
+/// Ping an address to check that it is online. If TCP stream is established, stream is closed,
 /// and Ok is returned. If TCP stream is not established, Err is returned.
 pub fn ping_addr(addr: &String) -> Result<String, String> {
     let send_addr = format!("{addr}:7878");
@@ -243,10 +245,8 @@ pub fn ping_addr(addr: &String) -> Result<String, String> {
 
     match TcpStream::connect(&send_addr) {
         Ok(_) => return Ok(format!("{addr} is online!")),
-        Err(_) => {
-            return Err(format!("{addr} did not respond to ping"));
-        }
-    };
+        Err(_) => return Err(format!("{addr} did not respond to ping"))
+    }
 }
 
 
@@ -257,11 +257,11 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 
     let cipher = match perform_dh_handshake(&stream) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Diffie-Hellman handshake failed: {e}")),
+        Err(e) => return Err(format!("Diffie-Hellman handshake failed: {e}"))
     };
-    let mut nonce: [u8; 12] = [0; 12];
-
+    
     // send mode packet
+    let mut nonce: [u8; 12] = [0; 12];
     let req_catalog_packet = packet::encode_packet(String::from("request_catalog").into_bytes());
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet) {
         return Err(format!("Failed to send request for sender catalog {e}"));
@@ -276,39 +276,29 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
             Ok(_) => {
                 let decrypted = match encryption::decrypt_message(&mut nonce, &cipher, &buffer) {
                     Ok(p) => p,
-                    Err(e) => {
-                        return Err(format!("Failed to decrypt packet: {e}"));
-                    }
+                    Err(e) => return Err(format!("Failed to decrypt packet: {e}"))
                 };
 
                 let packet = match packet::decode_packet(decrypted) {
-                    Ok(pkt) => pkt,
-                    Err(e) => {
-                        return Err(format!("Failed to decode packet: {e}"));
-                    }
+                    Ok(p) => p,
+                    Err(e) => return Err(format!("Failed to decode packet: {e}"))
                 };
 
                 catalog_bytes.extend_from_slice(&packet.data);
-            }
-            Err(e) => {
-                return Err(format!("Error reading from stream: {e}"));
-            }
+            },
+            Err(e) => return Err(format!("Error reading from stream: {e}"))
         }
     }
 
     // print catalog
     let catalog_json = match String::from_utf8(catalog_bytes) {
         Ok(s) => s,
-        Err(e) => {
-            return Err(format!("Failed to parse catalog as UTF-8: {e}"));
-        }
+        Err(e) => return Err(format!("Failed to parse catalog as UTF-8: {e}"))
     };
 
     let catalog: CatalogMap = match serde_json::from_str(&catalog_json) {
         Ok(c) => c,
-        Err(e) => {
-            return Err(format!("Failed to deserialize catalog into hash map: {e}"));
-        }
+        Err(e) => return Err(format!("Failed to deserialize catalog into hash map: {e}"))
     };
 
     if catalog.is_empty() {
@@ -376,14 +366,12 @@ fn await_file_name_and_hash(
         return Err(format!("Failed to read from stream: {e}"));
     }
     let file_path = match encryption::decrypt_message(nonce, &cipher, &buffer) {
-        Ok(fp) => fp,
-        Err(e) => {
-            return Err(format!("Failed to decrypt ciphertext: {e}"));
-        }
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
     };
     let file_path_packet = match packet::decode_packet(file_path) {
         Ok(p) => p,
-        Err(e) => return Err(format!("Unable to decode packet: {e}")),
+        Err(e) => return Err(format!("Unable to decode packet: {e}"))
     };
     let file_path = String::from_utf8_lossy(file_path_packet.data.as_slice());
 
@@ -393,9 +381,7 @@ fn await_file_name_and_hash(
     }
     let file_hash = match encryption::decrypt_message(nonce, &cipher, &buffer) {
         Ok(h) => h,
-        Err(e) => {
-            return Err(format!("Failed to decrypt ciphertext: {e}"));
-        }
+        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
     };
     let file_hash = packet::decode_packet(file_hash);
     let file_hash_packet = file_hash.unwrap();
@@ -419,7 +405,7 @@ fn save_incoming_file(
 
     let file_name_and_hash = match await_file_name_and_hash(&cipher, nonce, &stream) {
         Ok(output) => output,
-        Err(e) => return Err(e),
+        Err(e) => return Err(e)
     };
 
     let file_name = file_name_and_hash.0;
@@ -431,7 +417,7 @@ fn save_incoming_file(
     // read file
     let mut file = match file_rw::open_writable_file(&save_path) {
         Ok(f) => f,
-        Err(e) => return Err(e),
+        Err(e) => return Err(e)
     };
 
     // read bytes until peer disconnects
@@ -458,20 +444,20 @@ fn save_incoming_file(
                     println!("Successfully downloaded \"{file_name}\"");
                 }
                 return Ok(());
-            }
+            },
             Ok(_) => (),
-            Err(e) => return Err(format!("Failed to read from stream: {e}")),
+            Err(e) => return Err(format!("Failed to read from stream: {e}"))
         };
 
         // decrypt
         let plaintext = match encryption::decrypt_message(nonce, &cipher, &buffer) {
             Ok(p) => p,
-            Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}")),
+            Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
         };
 
         let received_packet = match packet::decode_packet(plaintext) {
             Ok(p) => p,
-            Err(e) => return Err(format!("Unable to decode packet: {e}")),
+            Err(e) => return Err(format!("Unable to decode packet: {e}"))
         };
 
         let data_bytes = received_packet.data.len();
@@ -480,8 +466,8 @@ fn save_incoming_file(
                 if n != data_bytes {
                     return Err(format!("Read {data_bytes} file bytes from stream, was only able to write {n} bytes to file"))
                 }
-            }
-            Err(e) => return Err(format!("Failed to write byte to file: {e}")),
+            },
+            Err(e) => return Err(format!("Failed to write byte to file: {e}"))
         }
     }
 }
