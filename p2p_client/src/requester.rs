@@ -401,7 +401,6 @@ fn save_incoming_file(
 ) -> Result<(), String> {
     // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so
     // buffer needs to be PACKET_SIZE + 16 bytes in size
-    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
 
     let file_name_and_hash = match await_file_name_and_hash(&cipher, nonce, &stream) {
         Ok(output) => output,
@@ -422,6 +421,7 @@ fn save_incoming_file(
 
     // read bytes until peer disconnects
     loop {
+        let mut buffer = [0u8; packet::PACKET_SIZE + 16];
         match stream.read(&mut buffer) {
             Ok(0) => {
                 // End connection
@@ -444,6 +444,9 @@ fn save_incoming_file(
                     println!("Successfully downloaded \"{file_name}\"");
                 }
                 return Ok(());
+            },
+            Ok(n) if n != buffer.len() => {
+                eprintln!("[WARNING] expected to read {} bytes from stream, only read {n}", buffer.len())
             },
             Ok(_) => (),
             Err(e) => return Err(format!("Failed to read from stream: {e}"))

@@ -12,6 +12,7 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
+use serde_json::to_string;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -87,9 +88,9 @@ fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String
         catalog = deserialized;
     } else {
         // create the file if it doesn't exist
-        let empty_catg: CatalogMap = HashMap::new();
-        write_updated_catalog(catalog_path, &empty_catg)?;
-        catalog = empty_catg;
+        let empty_catalog: CatalogMap = HashMap::new();
+        write_updated_catalog(catalog_path, &empty_catalog)?;
+        catalog = empty_catalog;
     }
 
     return Ok(catalog);
@@ -110,8 +111,7 @@ fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result
         Err(e) => return Err(format!("Failed to serialize catalog: {e}")),
     };
 
-    let write_result = json_file.write_all(json.as_bytes());
-    if let Err(e) = write_result {
+    if let Err(e) = json_file.write_all(json.as_bytes()) {
         return Err(format!("Failed to write catalog file: {e}"));
     }
 
@@ -145,16 +145,6 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     };
     let file_hash = packet::compute_sha256_hash(&file_bytes);
     let file_hash_string: String = hex::encode(&file_hash);
-
-    // Ruben doesn't think this is the behavior we want. I think we want the value to be updated,
-    // otherwise if you want to change the file path you need to call remove, then add
-
-    // check if this file is already in catalog
-    // checks by hash, not file name, so two files with the same name but different content can coexist
-    // if catalog.contains_key(&file_hash_string) {
-    //     println!("File {file_path} ({file_hash_string}) already exists in catalog");
-    //     return Ok(());
-    // }
 
     // add/update entry in catalog
     catalog.insert(file_hash_string.clone(), absolute_file_path.to_string_lossy().into_owned());
@@ -331,6 +321,123 @@ fn send_file_name_and_hash(
 
 
 
+/// Handles sending listener's catalog to requester
+fn fulfill_catalog_request(
+    stream: &mut TcpStream,
+    nonce: &mut [u8; 12],
+    cipher: &Aes256Gcm,
+) -> Result<(), String> {
+    let catalog_path = match get_catalog_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
+    };
+
+    let catalog = match get_deserialized_catalog(&catalog_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
+    };
+
+    // remove absolute paths from catalog before sending
+    let mut pathless_catalog = CatalogMap::new();
+    if !catalog.is_empty() {
+        // print each catalog entry
+        for (hash, path) in catalog.iter() {
+            let file_name = Path::new(path)
+                .file_name()
+                .and_then(|os_str| os_str.to_str())
+                .unwrap_or("invalid UTF-8")
+                .to_string();
+            pathless_catalog.insert(hash.clone(), file_name);
+        }
+    }
+    
+    let catalog_bytes = match serde_json::to_string_pretty(&pathless_catalog) {
+        Ok(j) => j.into_bytes(),
+        Err(e) => return Err(format!("Failed to serialize catalog: {e}"))
+    };
+
+    let message = packet::encode_packet(catalog_bytes);
+    if let Err(e) = encryption::send_to_connection(stream, nonce, cipher, message) {
+        return Err(format!("Failed to send catalog: {e}"));
+    }
+
+    Ok(())
+}
+
+
+
+/// Handles sending requested file to requester
+fn fulfill_file_request(
+    mut stream: &mut TcpStream,
+    mut nonce: &mut [u8; 12],
+    cipher: &Aes256Gcm,
+) -> Result<(), String> {
+    // listen for hash of file to send
+    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
+    if let Err(e) = stream.read(&mut buffer) {
+        return Err(format!("Failed to read hash from stream: {e}"));
+    }
+
+    let file_hash_packet = match encryption::decrypt_message(nonce, cipher, &buffer) {
+        Ok(h) => h,
+        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
+    };
+
+    let file_hash_packet = match packet::decode_packet(file_hash_packet) {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Unable to decode packet: {e}"))
+    };
+
+    // figure out what file was requested
+    let file_hash = hex::encode(file_hash_packet.data);
+    let file_path = match get_file_from_catalog(&file_hash) {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to get file from catalog: {e}"))
+    };
+
+    // send peer file name and hash to be able to know what to save it as and verify they got it correctly
+    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, nonce, stream) {
+        return Err(format!("Failed to send file name and hash to peer: {e}"));
+    }
+
+    // read file
+    let mut file_bytes = match file_rw::open_iterable_file(&file_path) {
+        Ok(b) => b,
+        Err(e) => return Err(format!("Unable to open file: {e}"))
+    };
+
+    println!("Beginning to send {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
+
+    // write packets until EOF
+    loop {
+        let mut write_bytes: Vec<u8> = vec![];
+        // subtract 2 for the data_length bytes
+        let max_bytes = packet::PACKET_SIZE - 2;
+        for _ in 0..max_bytes {
+            match file_bytes.next() {
+                Some(Ok(b)) => write_bytes.push(b),
+                Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
+                None => {
+                    // when trying to read the next byte, we read EOF so send the last packet and return
+                    let message = packet::encode_packet(write_bytes);
+                    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) { 
+                        return Err(format!("Failed to send packet: {e}"));
+                    }
+                    println!("File {:?} successfully sent to {:?}", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
+                    return Ok(());
+                }
+            }
+        }
+        // encode the data and send the packet
+        let message = packet::encode_packet(write_bytes);
+        if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) {
+            return Err(format!("{e}"));
+        }
+    }
+}
+
+
+
 /// An asynchronous task that handles sending a file over `stream`
 pub async fn start_sender_task(mut stream: TcpStream) {
     // println!("Connecting to {:?}...", stream.peer_addr().unwrap());
@@ -398,127 +505,23 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     // split tasks depending on mode sent by requester
     match String::from_utf8(mode_packet.data) {
         Ok(m) if m == "request_catalog" => {
-            println!("Request catalog mode");
+            println!("Peer requested catalog");
             if let Err(e) = fulfill_catalog_request(&mut stream, &mut nonce, &cipher) {
                 eprintln!("Failed to fulfill catalog request: {e}");
+            } else {
+                println!("Catalog successfully sent")
             }
         },
         Ok(m) if m == "request_file" => {
-            println!("Request file mode");
+            println!("Peer requested a file");
             if let Err(e) = fulfill_file_request(&mut stream, &mut nonce, &cipher) {
                 eprintln!("Failed to fulfill file request: {e}");
             }
         },
-        Ok(_) => {},
+        Ok(_) => (),
         Err(e) => {
             eprintln!("Failed to read mode: {e}");
             return;
-        }
-    }
-}
-
-
-
-/// Handles sending listener's catalog to requester
-fn fulfill_catalog_request(
-    stream: &mut TcpStream,
-    nonce: &mut [u8; 12],
-    cipher: &Aes256Gcm,
-) -> Result<(), String> {
-    let catalog_path = match get_catalog_path() {
-        Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
-    };
-
-    let catalog = match get_serialized_catalog(&catalog_path) {
-        Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
-    };
-
-    let message = packet::encode_packet(catalog);
-    if let Err(e) = encryption::send_to_connection(stream, nonce, cipher, message) {
-        return Err(format!("Failed to send catalog: {e}"));
-    }
-
-    Ok(())
-}
-
-
-
-/// Handles sending requested file to requester
-fn fulfill_file_request(
-    mut stream: &mut TcpStream,
-    mut nonce: &mut [u8; 12],
-    cipher: &Aes256Gcm,
-) -> Result<(), String> {
-    // listen for hash of file to send
-    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
-    if let Err(e) = stream.read(&mut buffer) {
-        return Err(format!("Failed to read hash from stream: {e}"));
-    }
-
-    let file_hash_packet = match encryption::decrypt_message(nonce, cipher, &buffer) {
-        Ok(h) => h,
-        Err(e) => {
-            return Err(format!("Failed to decrypt ciphertext: {e}"));
-        }
-    };
-
-    let file_hash_packet = match packet::decode_packet(file_hash_packet) {
-        Ok(p) => p,
-        Err(e) => {
-            return Err(format!("Unable to decode packet: {e}"));
-        }
-    };
-
-    // figure out what file was requested
-    let file_hash = hex::encode(file_hash_packet.data);
-    let file_path = match get_file_from_catalog(&file_hash) {
-        Ok(p) => p,
-        Err(e) => {
-            return Err(format!("Failed to get file from catalog: {e}"));
-        }
-    };
-
-    // send peer file name and hash to be able to know what to save it as and verify they got it correctly
-    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, nonce, stream) {
-        return Err(format!("Failed to send file name and hash to peer: {e}"));
-    }
-
-    // read file
-    let mut file_bytes = match file_rw::open_iterable_file(&file_path) {
-        Ok(b) => b,
-        Err(e) => {
-            return Err(format!("Unable to open file: {e}"));
-        }
-    };
-
-    println!("Beginning to send {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
-
-    // write packets until EOF
-    loop {
-        let mut write_bytes: Vec<u8> = vec![];
-        // subtract 2 for the data_length bytes
-        let max_bytes = packet::PACKET_SIZE - 2;
-        for _ in 0..max_bytes {
-            match file_bytes.next() {
-                Some(Ok(b)) => write_bytes.push(b),
-                Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
-                None => {
-                    // when trying to read the next byte, we read EOF so send the last packet and return
-                    let message = packet::encode_packet(write_bytes);
-                    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) { 
-                        return Err(format!("Failed to send packet: {e}"));
-                    }
-                    println!("File {:?} successfully sent to {:?}", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
-                    return Ok(());
-                }
-            }
-        }
-        // encode the data and send the packet
-        let message = packet::encode_packet(write_bytes);
-        if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) {
-            return Err(format!("{e}"));
         }
     }
 }
