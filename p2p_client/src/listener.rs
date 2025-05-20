@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 17th, 2025
+//! May 19th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -12,7 +12,6 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
-use serde_json::to_string;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -22,6 +21,8 @@ use tokio::runtime::Runtime;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type CatalogMap = HashMap<String, String>; // hash is key, absolute file path is value
+
+
 
 /// Gets the path to the catalog. If catalog doesn't exist, a new one is created.
 /// The catalog is stored in a static directory.
@@ -47,25 +48,26 @@ fn get_catalog_path() -> Result<PathBuf, String> {
     Ok(catalog_path)
 }
 
-
+// Lazuli's modifications to fulfill_catalog_request() (removing absolute paths from catalog before sending)
+// rendered this function unused. Do we still want to keep it around for other use cases?
 
 /// Returns catalog as Vector of bytes given the absolute path to it
-fn get_serialized_catalog(catalog_path: &PathBuf) -> Result<Vec<u8>, String> {
-    if catalog_path.exists() {
-        match fs::read(&catalog_path) {
-            Ok(bytes) => Ok(bytes),
-            Err(e) => Err(e.to_string()),
-        }
-    } else {
-        // create the file if it doesn't exist
-        let empty_catg: CatalogMap = HashMap::new();
-        write_updated_catalog(catalog_path, &empty_catg)?;
-        match fs::read(&catalog_path) {
-            Ok(bytes) => Ok(bytes),
-            Err(e) => Err(e.to_string()),
-        }
-    }
-}
+// fn get_serialized_catalog(catalog_path: &PathBuf) -> Result<Vec<u8>, String> {
+//     if catalog_path.exists() {
+//         match fs::read(&catalog_path) {
+//             Ok(bytes) => Ok(bytes),
+//             Err(e) => Err(e.to_string()),
+//         }
+//     } else {
+//         // create the file if it doesn't exist
+//         let empty_catg: CatalogMap = HashMap::new();
+//         write_updated_catalog(catalog_path, &empty_catg)?;
+//         match fs::read(&catalog_path) {
+//             Ok(bytes) => Ok(bytes),
+//             Err(e) => Err(e.to_string()),
+//         }
+//     }
+// }
 
 
 
@@ -338,6 +340,7 @@ fn fulfill_catalog_request(
     };
 
     // remove absolute paths from catalog before sending
+    // important for security and privacy concerns to remove BEFORE sending packet
     let mut pathless_catalog = CatalogMap::new();
     if !catalog.is_empty() {
         // print each catalog entry
@@ -406,7 +409,7 @@ fn fulfill_file_request(
         Err(e) => return Err(format!("Unable to open file: {e}"))
     };
 
-    println!("Beginning to send {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
+    println!("Sending {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
 
     // write packets until EOF
     loop {
