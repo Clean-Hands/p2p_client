@@ -373,7 +373,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
 
     // listen for the mode packet sent
-    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
+    let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
     if let Err(e) = stream.read(&mut buffer) {
         eprintln!("Failed to read from stream: {e}");
         return;
@@ -452,7 +452,7 @@ fn fulfill_file_request(
     cipher: &Aes256Gcm,
 ) -> Result<(), String> {
     // listen for hash of file to send
-    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
+    let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
     if let Err(e) = stream.read(&mut buffer) {
         return Err(format!("Failed to read hash from stream: {e}"));
     }

@@ -8,6 +8,9 @@ use aes_gcm::{Aes256Gcm, Nonce, aead::Aead};
 use std::io::Write;
 use std::net::TcpStream;
 
+// Aes256Gcm appends a 16 byte verification tag to the end of the ciphertext
+pub const AES256GCM_VER_TAG_SIZE: usize = 16;
+
 
 
 // TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
@@ -47,12 +50,10 @@ pub fn encrypt_message(
 
 
 /// Decrypt message given nonce, cipher, and ciphertext
-///
-/// Ciphertext is assumed to be `PACKET_SIZE + 16` bytes because Aes256Gcm adds a 16 byte verification tag
 pub fn decrypt_message(
     nonce: &mut [u8; 12],
     cipher: &Aes256Gcm,
-    ciphertext: &[u8; packet::PACKET_SIZE + 16],
+    ciphertext: &[u8; packet::PACKET_SIZE + AES256GCM_VER_TAG_SIZE],
 ) -> Result<[u8; packet::PACKET_SIZE], String> {
     let denc_nonce = Nonce::from_slice(nonce);
     let plaintext_as_array = match cipher.decrypt(&denc_nonce, ciphertext.as_ref()) {

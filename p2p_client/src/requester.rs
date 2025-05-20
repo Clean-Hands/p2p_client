@@ -268,7 +268,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
     }
 
     // listen for response
-    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
+    let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
     let mut catalog_bytes = Vec::new();
     loop {
         match stream.read(&mut buffer) {
@@ -358,8 +358,7 @@ fn await_file_name_and_hash(
     nonce: &mut [u8; 12],
     mut stream: &TcpStream,
 ) -> Result<(String, Vec<u8>), String> {
-    // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext
-    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
+    let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
 
     // listen for file name
     if let Err(e) = stream.read(&mut buffer) {
@@ -399,9 +398,7 @@ fn save_incoming_file(
     mut stream: TcpStream,
     mut save_path: PathBuf,
 ) -> Result<(), String> {
-    // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext, so
-    // buffer needs to be PACKET_SIZE + 16 bytes in size
-    let mut buffer = [0u8; packet::PACKET_SIZE + 16];
+    let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
 
     let file_name_and_hash = match await_file_name_and_hash(&cipher, nonce, &stream) {
         Ok(output) => output,
