@@ -43,6 +43,7 @@ pub fn encrypt_message(
         Ok(c) => c,
         Err(e) => return Err(format!("Encryption failed: {}", e))
     };
+
     increment_nonce(nonce);
     Ok(ciphertext)
 }

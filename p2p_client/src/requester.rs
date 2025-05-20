@@ -14,7 +14,7 @@ use directories::ProjectDirs;
 use hex;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
@@ -387,27 +387,29 @@ fn save_incoming_file(
     mut save_path: PathBuf,
     hash: &String
 ) -> Result<(), String> {
-    let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
 
+    println!("Waiting on file metadata...");
     let file_name = match await_file_name(&cipher, nonce, &stream) {
         Ok(output) => output,
         Err(e) => return Err(e)
     };
-
-    println!("Downloading \"{file_name}\"...");
-
-    save_path.push(&file_name);
-
+    println!("File metadata received");
+    
     // read file
+    save_path.push(&file_name);
     let mut file = match file_rw::open_writable_file(&save_path) {
         Ok(f) => f,
         Err(e) => return Err(e)
     };
+    
+    println!("Downloading \"{file_name}\"...");
 
     // read bytes until peer disconnects
     loop {
-        match stream.read(&mut buffer) {
-            Ok(0) => {
+        let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
+        match stream.read_exact(&mut buffer) {
+            Ok(_) => (),
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof =>  {
                 // End connection
                 println!("Peer {} disconnected", stream.peer_addr().unwrap());
 
@@ -436,7 +438,6 @@ fn save_incoming_file(
                 }
                 return Ok(());
             },
-            Ok(_) => (),
             Err(e) => return Err(format!("Failed to read from stream: {e}"))
         };
 
@@ -539,6 +540,8 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         return;
     }
 
+    println!("Sending file request...");
+
     // send file hash
     let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, file_hash_packet) {
@@ -549,6 +552,8 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         request_file(addr, hash, file_path);
         return;
     }
+    println!("File request sent");
+
 
     // start receiving file packets, saving it in the directory file_path
     if let Err(e) = save_incoming_file(&cipher, &mut initial_nonce, stream, file_path.clone(), &hash) {
@@ -556,7 +561,7 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         eprintln!("{e}");
         // TODO: find a better solution (request a packet again if it fails)
         //       this is just brute forcing the problem and terrible for huge files
-        request_file(addr, hash, file_path);
+        // request_file(addr, hash, file_path);
         return;
     }
 }
