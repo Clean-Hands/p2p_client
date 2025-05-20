@@ -551,6 +551,8 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         return;
     }
 
+    println!("Sending file request...");
+
     // send file hash
     let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut initial_nonce, &cipher, file_hash_packet) {
