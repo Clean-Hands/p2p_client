@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 19th, 2025
+//! May 20th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -79,12 +79,12 @@ fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String
     if catalog_path.exists() {
         let serialized = match fs::read_to_string(&catalog_path) {
             Ok(c) => c,
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(e.to_string())
         };
 
         let deserialized = match serde_json::from_str(&serialized) {
             Ok(d) => d,
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(e.to_string())
         };
 
         catalog = deserialized;
@@ -95,7 +95,7 @@ fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String
         catalog = empty_catalog;
     }
 
-    return Ok(catalog);
+    Ok(catalog)
 }
 
 
@@ -105,12 +105,12 @@ fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result
     // write updated catalog to catalog.json
     let mut json_file = match File::create(catalog_path) {
         Ok(f) => f,
-        Err(e) => return Err(format!("Failed to open catalog file: {e}")),
+        Err(e) => return Err(format!("Failed to open catalog file: {e}"))
     };
 
     let json = match serde_json::to_string_pretty(catalog) {
         Ok(j) => j,
-        Err(e) => return Err(format!("Failed to serialize catalog: {e}")),
+        Err(e) => return Err(format!("Failed to serialize catalog: {e}"))
     };
 
     if let Err(e) = json_file.write_all(json.as_bytes()) {
@@ -302,7 +302,7 @@ fn send_file_name(
     // send file name
     match file_path.file_name() {
         Some(f) => {
-            let file_name_packet = packet::encode_packet(f.to_string_lossy().into_owned().as_bytes().to_vec());
+            let file_name_packet = packet::encode_packet(f.to_string_lossy().into_owned().into_bytes());
             if let Err(e)  = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet) {
                 return Err(format!("Unable to send file name: {e}"));
             }
@@ -448,7 +448,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     // wait for public key response from listener
     let mut public_key_bytes: [u8; 32] = [0; 32];
     match stream.read(&mut public_key_bytes) {
-        Ok(n) if n == 0 => return, // 0  bytes read indicates ping was sent, so do not continue connection
+        Ok(n) if n == 0 => return, // 0 bytes read indicates ping was sent, so do not continue connection
         Ok(n) if n != public_key_bytes.len() => {
             eprintln!("Incorrect number of bytes received for peer's public key. Expected {} bytes but recieved {} bytes", public_key_bytes.len(), n);
             return;
