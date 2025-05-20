@@ -297,8 +297,8 @@ pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
 
 
 
-/// Send a file name and its hash to the requesting TcpStream
-fn send_file_name_and_hash(
+/// Send a file name to the requesting TcpStream
+fn send_file_name(
     file_path: &PathBuf,
     cipher: &Aes256Gcm,
     mut nonce: &mut [u8; 12],
@@ -313,17 +313,6 @@ fn send_file_name_and_hash(
             }
         },
         None => return Err(format!("Unable to get file name from file path"))
-    }
-
-    // send file hash
-    let hash_bytes = match file_rw::read_file_bytes(&file_path) {
-        Ok(h) => h,
-        Err(e) => return Err(e)
-    };
-    let file_hash_data = packet::compute_sha256_hash(&hash_bytes);
-    let file_hash_packet = packet::encode_packet(file_hash_data);
-    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet) {
-        return Err(format!("Unable to send hash: {e}"));
     }
 
     Ok(())
@@ -480,9 +469,9 @@ fn fulfill_file_request(
         }
     };
 
-    // send peer file name and hash to be able to know what to save it as and verify they got it correctly
-    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, nonce, stream) {
-        return Err(format!("Failed to send file name and hash to peer: {e}"));
+    // send peer file name so it can properly save the file
+    if let Err(e) = send_file_name(&file_path, &cipher, nonce, stream) {
+        return Err(format!("Failed to send file name to peer: {e}"));
     }
 
     // read file

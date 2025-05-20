@@ -352,12 +352,12 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 
 
 
-/// Receives file name and file hash from the sender
-fn await_file_name_and_hash(
+/// Receives file name from the sender
+fn await_file_name(
     cipher: &Aes256Gcm,
     nonce: &mut [u8; 12],
     mut stream: &TcpStream,
-) -> Result<(String, Vec<u8>), String> {
+) -> Result<String, String> {
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
 
     // listen for file name
@@ -374,19 +374,7 @@ fn await_file_name_and_hash(
     };
     let file_path = String::from_utf8_lossy(file_path_packet.data.as_slice());
 
-    // listen for the filehash
-    if let Err(e) = stream.read(&mut buffer) {
-        return Err(format!("Failed to read from stream: {e}"));
-    }
-    let file_hash = match encryption::decrypt_message(nonce, &cipher, &buffer) {
-        Ok(h) => h,
-        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
-    };
-    let file_hash = packet::decode_packet(file_hash);
-    let file_hash_packet = file_hash.unwrap();
-    let file_hash = file_hash_packet.data.as_slice();
-
-    Ok((String::from(file_path), file_hash.to_vec()))
+    Ok(String::from(file_path))
 }
 
 
@@ -397,16 +385,15 @@ fn save_incoming_file(
     nonce: &mut [u8; 12],
     mut stream: TcpStream,
     mut save_path: PathBuf,
+    hash: &String
 ) -> Result<(), String> {
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
 
-    let file_name_and_hash = match await_file_name_and_hash(&cipher, nonce, &stream) {
+    let file_name = match await_file_name(&cipher, nonce, &stream) {
         Ok(output) => output,
         Err(e) => return Err(e)
     };
 
-    let file_name = file_name_and_hash.0;
-    let file_hash = file_name_and_hash.1;
     println!("Downloading \"{file_name}\"...");
 
     save_path.push(&file_name);
@@ -435,7 +422,14 @@ fn save_incoming_file(
                 };
                 let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
 
-                if computed_file_hash != file_hash {
+                // computed file hash is raw bytes but hash is hexadecimal, so convert hash to 
+                // raw bytes to match
+                let expected_hash = match hex::decode(hash) {
+                    Ok(b) => b,
+                    Err(e) => return Err(format!("Failed to decode hash into raw bytes from hex: {e}")),
+                };
+
+                if computed_file_hash != expected_hash {
                     return Err(String::from("Failed to verify file hash. File not received correctly."))
                 } else {
                     println!("Successfully downloaded \"{file_name}\"");
@@ -557,7 +551,7 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
     }
 
     // start receiving file packets, saving it in the directory file_path
-    if let Err(e) = save_incoming_file(&cipher, &mut initial_nonce, stream, file_path.clone()) {
+    if let Err(e) = save_incoming_file(&cipher, &mut initial_nonce, stream, file_path.clone(), &hash) {
         // if receiving a file fails in any way, try again
         eprintln!("{e}");
         // TODO: find a better solution (request a packet again if it fails)
