@@ -140,6 +140,9 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
         Err(e) => return Err(format!("Unable to get the requested file's absolute path: {e}"))
     };
 
+    // for large files (> ~100 MB) hashing can take a significant amount of time
+    println!("Computing file hash...");
+
     // get hash of file
     let file_bytes = match file_rw::read_file_bytes(&absolute_file_path) {
         Ok(b) => b,
