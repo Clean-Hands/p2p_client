@@ -1,6 +1,6 @@
 //! file_rw.rs
 //! by Lazuli Kleinhans, Ruben Boero
-//! May 17th, 2025
+//! May 19th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
@@ -55,7 +55,7 @@ pub fn open_iterable_file(file_path: &PathBuf) -> Result<Bytes<File>, String> {
         Ok(f) => f,
         Err(e) => return Err(format!("Couldn't open file: {e}"))
     };
-    return Ok(f.bytes());
+    Ok(f.bytes())
 }
 
 
@@ -71,7 +71,6 @@ pub fn open_iterable_file(file_path: &PathBuf) -> Result<Bytes<File>, String> {
 ///     eprintln!("{e}")
 /// }
 /// ```
-///
 #[allow(dead_code)]
 pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), String> {
     match fs::write(file_path, bytes) {
@@ -111,6 +110,8 @@ pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
     }
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,7 +134,6 @@ mod tests {
 
     #[test]
     fn test_open_iterable_file_and_read_correct_bytes() {
-        // let test_file_name = "test_open_iterable_file.txt".to_string();
         let test_file_name = PathBuf::from("test_open_iterable_file.txt");
         let expected_data = b"Ruben said Lazuli was here :)".to_vec();
 

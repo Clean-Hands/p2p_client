@@ -1,6 +1,6 @@
 //! encryption.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 17th, 2025
+//! May 19th, 2025
 //! CS347 Advanced Software Design
 
 use crate::packet;
@@ -11,7 +11,7 @@ use std::net::TcpStream;
 
 
 // TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
-/// increment the nonce within the struct
+/// Increment the nonce within the struct
 fn increment_nonce(nonce: &mut [u8; 12]) {
     let mut carry = true;
 
@@ -29,7 +29,7 @@ fn increment_nonce(nonce: &mut [u8; 12]) {
 
 
 
-/// encrypt message given nonce, cipher, and message
+/// Encrypt message given nonce, cipher, and message
 pub fn encrypt_message(
     nonce: &mut [u8; 12],
     cipher: &Aes256Gcm,
@@ -46,10 +46,9 @@ pub fn encrypt_message(
 
 
 
-/// decrypt message given nonce, cipher, and ciphertext
+/// Decrypt message given nonce, cipher, and ciphertext
 ///
-/// ciphertext is assumed to be 528 bytes because packet is always 512 bytes long & Aes256Gcm adds a 16
-/// byte verification tag
+/// Ciphertext is assumed to be `PACKET_SIZE + 16` bytes because Aes256Gcm adds a 16 byte verification tag
 pub fn decrypt_message(
     nonce: &mut [u8; 12],
     cipher: &Aes256Gcm,
@@ -81,8 +80,7 @@ pub fn send_to_connection(
     message: [u8; packet::PACKET_SIZE],
 ) -> Result<(), String> {
     // encrypt message
-    // this function call assumes that cipher is Some type, still need to check that cipher
-    // is initialized correctly in start_sender_task
+    // TODO: check that cipher is initialized correctly in start_sender_task
     let ciphertext = match encrypt_message(nonce, cipher, &message) {
         Ok(c) => c,
         Err(e) => return Err(format!("Encryption failed: {e}"))
