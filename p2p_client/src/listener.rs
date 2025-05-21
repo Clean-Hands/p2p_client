@@ -5,6 +5,7 @@
 
 use crate::encryption;
 use crate::file_rw;
+use crate::file_rw::get_file_size;
 use crate::packet;
 use aes_gcm::{
     Aes256Gcm, Key,
@@ -297,8 +298,8 @@ pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
 
 
 
-/// Send a file name and its hash to the requesting TcpStream
-fn send_file_name_and_hash(
+/// Send a file name, its hash, and its size to the requesting TcpStream
+fn send_file_metadata(
     file_path: &PathBuf,
     cipher: &Aes256Gcm,
     mut nonce: &mut [u8; 12],
@@ -324,6 +325,17 @@ fn send_file_name_and_hash(
     let file_hash_packet = packet::encode_packet(file_hash_data);
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet) {
         return Err(format!("Unable to send hash: {e}"));
+    }
+
+    // send file size
+    let file_size = match get_file_size(&file_path) {
+        Ok(s) => s,
+        Err(e) => return Err(e)
+    };
+    let file_size_bytes = file_size.to_be_bytes().to_vec();
+    let file_size_packet = packet::encode_packet(file_size_bytes);
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_size_packet) {
+        return Err(format!("Unable to send file size: {e}"));
     }
 
     Ok(())
@@ -481,7 +493,7 @@ fn fulfill_file_request(
     };
 
     // send peer file name and hash to be able to know what to save it as and verify they got it correctly
-    if let Err(e) = send_file_name_and_hash(&file_path, &cipher, nonce, stream) {
+    if let Err(e) = send_file_metadata(&file_path, &cipher, nonce, stream) {
         return Err(format!("Failed to send file name and hash to peer: {e}"));
     }
 

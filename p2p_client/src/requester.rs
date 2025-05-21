@@ -14,15 +14,18 @@ use directories::ProjectDirs;
 use hex;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
-use std::time::Duration;
 use x25519_dalek::{EphemeralSecret, PublicKey};
+use std::time::{Instant, Duration};
 
 type CatalogMap = HashMap<String, String>;
 type PeerMap = HashMap<String, String>;
+
+const SPINNER: &[char] = &['|', '/', '-', '\\'];
+const BAR_WIDTH: usize = 30;
 
 /// Gets the path to the list of peers. If catalog doesn't exist, a new one is created.
 /// The list is stored in a static directory.
@@ -362,12 +365,12 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 
 
 
-/// Receives file name and file hash from the sender
-fn await_file_name_and_hash(
+/// Receives file name, its hash, and its size from the sender
+fn await_file_metadata(
     cipher: &Aes256Gcm,
     nonce: &mut [u8; 12],
     mut stream: &TcpStream,
-) -> Result<(String, Vec<u8>), String> {
+) -> Result<(String, Vec<u8>, f64), String> {
     // Aes256Gcm adds a 16 byte verification tag to the end of the ciphertext
     let mut buffer = [0u8; packet::PACKET_SIZE + 16];
 
@@ -401,7 +404,49 @@ fn await_file_name_and_hash(
     let file_hash_packet = file_hash.unwrap();
     let file_hash = file_hash_packet.data.as_slice();
 
-    Ok((String::from(file_path), file_hash.to_vec()))
+    // listen for the file size
+    if let Err(e) = stream.read(&mut buffer) {
+        return Err(format!("Failed to read from stream: {e}"));
+    }
+    let file_size = match encryption::decrypt_message(nonce, &cipher, &buffer) {
+        Ok(h) => h,
+        Err(e) => {
+            return Err(format!("Failed to decrypt ciphertext: {e}"));
+        }
+    };
+    let file_size = packet::decode_packet(file_size);
+    let file_size_packet = file_size.unwrap();
+    let file_size_array: [u8; 8] = file_size_packet.data.try_into().expect("Vec must have exactly 8 elements");
+    let file_size = u64::from_be_bytes(file_size_array);
+
+    Ok((String::from(file_path), file_hash.to_vec(), file_size as f64))
+}
+
+
+
+/// prints a download progress bar to stdout (every 100ms)
+fn print_loading_bar(bytes_sent: f64, total_bytes: f64, tick: usize) {
+    // 
+    let percent = bytes_sent / total_bytes;
+    let filled = (percent as f64 * BAR_WIDTH as f64).round() as usize;
+    
+    let empty = BAR_WIDTH - filled;
+    let spinner = SPINNER[tick % SPINNER.len()];
+
+    let progress_bar = format!(
+        "[{}{}]",
+        "=".repeat(filled),
+        " ".repeat(empty)
+    );
+
+    print!(
+        "\r{} {} {:>5.1}%",
+        spinner,
+        progress_bar,
+        percent as f64 * 100.0,
+    );
+    io::stdout().flush().unwrap();
+
 }
 
 
@@ -417,13 +462,15 @@ fn save_incoming_file(
     // buffer needs to be PACKET_SIZE + 16 bytes in size
     let mut buffer = [0u8; packet::PACKET_SIZE + 16];
 
-    let file_name_and_hash = match await_file_name_and_hash(&cipher, nonce, &stream) {
+    let file_metadata = match await_file_metadata(&cipher, nonce, &stream) {
         Ok(output) => output,
         Err(e) => return Err(e),
     };
 
-    let file_name = file_name_and_hash.0;
-    let file_hash = file_name_and_hash.1;
+    let file_name = file_metadata.0;
+    let file_hash = file_metadata.1;
+    let file_size = file_metadata.2;
+
     println!("Downloading \"{file_name}\"...");
 
     save_path.push(&file_name);
@@ -435,10 +482,15 @@ fn save_incoming_file(
     };
 
     // read bytes until peer disconnects
+    let mut curr_bytes_read: f64 = 0.0;
+    let mut tick = 0;
+    let mut last_update = Instant::now();
+    let update_interval = Duration::from_millis(100);
     loop {
         match stream.read(&mut buffer) {
             Ok(0) => {
                 // End connection
+                println!("\r✓ [==============================]  100.0%");
                 println!("Peer {} disconnected", stream.peer_addr().unwrap());
 
                 // verify file hash is correct
@@ -475,6 +527,7 @@ fn save_incoming_file(
         };
 
         let data_bytes = received_packet.data.len();
+        curr_bytes_read += data_bytes as f64;
         match file.write(&received_packet.data) {
             Ok(n) => {
                 if n != data_bytes {
@@ -483,7 +536,15 @@ fn save_incoming_file(
             }
             Err(e) => return Err(format!("Failed to write byte to file: {e}")),
         }
+
+        // update loading bar if 100ms has elapsed
+        if last_update.elapsed() >= update_interval {
+            print_loading_bar(curr_bytes_read, file_size, tick);
+            tick += 1;
+            last_update = Instant::now();
+        }
     }
+
 }
 
 
