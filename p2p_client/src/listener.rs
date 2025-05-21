@@ -268,6 +268,52 @@ pub fn view_catalog() -> Result<(), String> {
 
 
 
+/// Handles sending listener's catalog to requester
+fn fulfill_catalog_request(
+    stream: &mut TcpStream,
+    nonce: &mut [u8; 12],
+    cipher: &Aes256Gcm,
+) -> Result<(), String> {
+    let catalog_path = match get_catalog_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
+    };
+
+    let catalog = match get_deserialized_catalog(&catalog_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
+    };
+
+    // remove absolute paths from catalog before sending
+    // important for security and privacy concerns to remove BEFORE sending packet
+    let mut pathless_catalog = CatalogMap::new();
+    if !catalog.is_empty() {
+        // modify each catalog entry
+        for (hash, path) in catalog.iter() {
+            let file_name = Path::new(path)
+                .file_name()
+                .and_then(|os_str| os_str.to_str())
+                .unwrap_or("invalid UTF-8")
+                .to_string();
+            pathless_catalog.insert(hash.clone(), file_name);
+        }
+    }
+    
+    let catalog_bytes = match serde_json::to_string_pretty(&pathless_catalog) {
+        Ok(j) => j.into_bytes(),
+        Err(e) => return Err(format!("Failed to serialize catalog: {e}"))
+    };
+
+    let message = packet::encode_packet(catalog_bytes);
+    if let Err(e) = encryption::send_to_connection(stream, nonce, cipher, message) {
+        return Err(format!("Failed to send catalog: {e}"));
+    }
+
+    Ok(())
+}
+
+
+
 /// Returns the absolute file path of a file (from the catalog) given its hash
 pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
     // load existing catalog or create a new one
@@ -313,51 +359,6 @@ fn send_file_name(
     Ok(())
 }
 
-
-
-/// Handles sending listener's catalog to requester
-fn fulfill_catalog_request(
-    stream: &mut TcpStream,
-    nonce: &mut [u8; 12],
-    cipher: &Aes256Gcm,
-) -> Result<(), String> {
-    let catalog_path = match get_catalog_path() {
-        Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
-    };
-
-    let catalog = match get_deserialized_catalog(&catalog_path) {
-        Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
-    };
-
-    // remove absolute paths from catalog before sending
-    // important for security and privacy concerns to remove BEFORE sending packet
-    let mut pathless_catalog = CatalogMap::new();
-    if !catalog.is_empty() {
-        // print each catalog entry
-        for (hash, path) in catalog.iter() {
-            let file_name = Path::new(path)
-                .file_name()
-                .and_then(|os_str| os_str.to_str())
-                .unwrap_or("invalid UTF-8")
-                .to_string();
-            pathless_catalog.insert(hash.clone(), file_name);
-        }
-    }
-    
-    let catalog_bytes = match serde_json::to_string_pretty(&pathless_catalog) {
-        Ok(j) => j.into_bytes(),
-        Err(e) => return Err(format!("Failed to serialize catalog: {e}"))
-    };
-
-    let message = packet::encode_packet(catalog_bytes);
-    if let Err(e) = encryption::send_to_connection(stream, nonce, cipher, message) {
-        return Err(format!("Failed to send catalog: {e}"));
-    }
-
-    Ok(())
-}
 
 
 /// Handles sending requested file to requester
