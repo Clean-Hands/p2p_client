@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 20th, 2025
+//! May 21st, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -12,20 +12,22 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
+use size::Size;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
+use std::time::{Duration, Instant};
 use x25519_dalek::{EphemeralSecret, PublicKey};
-use std::time::{Instant, Duration};
 
 type CatalogMap = HashMap<String, String>;
 type PeerMap = HashMap<String, String>;
 
 const SPINNER: &[char] = &['|', '/', '-', '\\'];
-const BAR_WIDTH: usize = 30;
+const BAR_WIDTH: usize = 50;
+const UPDATE_DELAY_MS: u64 = 100;
 
 
 
@@ -464,10 +466,12 @@ fn print_loading_bar(bytes_sent: f64, total_bytes: f64, tick: usize) {
     );
 
     print!(
-        "\r{} {} {:>5.1}%",
+        "\r{} {} {:>5.1}% {:>10}/{}", // format the percent right-defined, field width of 5 characters, and show one decimal place
         spinner,
         progress_bar,
-        percent as f64 * 100.0
+        (percent * 100.0).clamp(0.0, 100.0),
+        Size::from_bytes(bytes_sent).to_string(),
+        Size::from_bytes(total_bytes)
     );
 
     let _ = io::stdout().flush();
@@ -507,14 +511,14 @@ fn save_incoming_file(
     let mut curr_bytes_read: f64 = 0.0;
     let mut tick = 0;
     let mut last_update = Instant::now();
-    let update_interval = Duration::from_millis(100);
+    let update_interval = Duration::from_millis(UPDATE_DELAY_MS);
     loop {
         let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
         match stream.read_exact(&mut buffer) {
             Ok(_) => (),
             Err(e) if e.kind() == ErrorKind::UnexpectedEof =>  {
                 // End connection
-                println!("\r✓ [{}]  100.0%", "=".repeat(BAR_WIDTH));
+                println!("\r✓ [{}] 100.0% {}", "=".repeat(BAR_WIDTH), " ".repeat(25));
                 println!("Peer {} disconnected", stream.peer_addr().unwrap());
 
                 // verify file hash is correct
