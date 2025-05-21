@@ -206,12 +206,12 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
 pub fn view_catalog() -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
+        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}"))
     };
 
     let catalog = match get_deserialized_catalog(&catalog_path) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
+        Err(e) => return Err(format!("Failed to retrieve catalog: {e}"))
     };
 
     if catalog.is_empty() {
@@ -272,16 +272,16 @@ pub fn view_catalog() -> Result<(), String> {
 fn fulfill_catalog_request(
     stream: &mut TcpStream,
     nonce: &mut [u8; 12],
-    cipher: &Aes256Gcm,
+    cipher: &Aes256Gcm
 ) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}")),
+        Err(e) => return Err(format!("Failed to retrieve catalog path: {e}"))
     };
 
     let catalog = match get_deserialized_catalog(&catalog_path) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retrieve catalog: {e}")),
+        Err(e) => return Err(format!("Failed to retrieve catalog: {e}"))
     };
 
     // remove absolute paths from catalog before sending
@@ -314,6 +314,40 @@ fn fulfill_catalog_request(
 
 
 
+/// Send a file name and its size to the requesting TcpStream
+fn send_file_metadata(
+    file_path: &PathBuf,
+    cipher: &Aes256Gcm,
+    mut nonce: &mut [u8; 12],
+    mut stream: &mut TcpStream
+) -> Result<(), String> {
+    // send file name
+    match file_path.file_name() {
+        Some(f) => {
+            let file_name_packet = packet::encode_packet(f.to_string_lossy().into_owned().into_bytes());
+            if let Err(e)  = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet) {
+                return Err(format!("Unable to send file name: {e}"));
+            }
+        },
+        None => return Err(format!("Unable to get file name from file path"))
+    }
+    
+    // send file size
+    let file_size = match file_rw::get_file_size(&file_path) {
+        Ok(s) => s,
+        Err(e) => return Err(e)
+    };
+    let file_size_bytes = file_size.to_be_bytes().to_vec();
+    let file_size_packet = packet::encode_packet(file_size_bytes);
+    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_size_packet) {
+        return Err(format!("Unable to send file size: {e}"));
+    }
+
+    Ok(())
+}
+
+
+
 /// Returns the absolute file path of a file (from the catalog) given its hash
 pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
     // load existing catalog or create a new one
@@ -338,34 +372,11 @@ pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
 
 
 
-/// Send a file name to the requesting TcpStream
-fn send_file_name(
-    file_path: &PathBuf,
-    cipher: &Aes256Gcm,
-    mut nonce: &mut [u8; 12],
-    mut stream: &mut TcpStream,
-) -> Result<(), String> {
-    // send file name
-    match file_path.file_name() {
-        Some(f) => {
-            let file_name_packet = packet::encode_packet(f.to_string_lossy().into_owned().into_bytes());
-            if let Err(e)  = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet) {
-                return Err(format!("Unable to send file name: {e}"));
-            }
-        },
-        None => return Err(format!("Unable to get file name from file path"))
-    }
-
-    Ok(())
-}
-
-
-
 /// Handles sending requested file to requester
 fn fulfill_file_request(
     mut stream: &mut TcpStream,
     mut nonce: &mut [u8; 12],
-    cipher: &Aes256Gcm,
+    cipher: &Aes256Gcm
 ) -> Result<(), String> {
     // listen for hash of file to send
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
@@ -390,9 +401,9 @@ fn fulfill_file_request(
         Err(e) => return Err(format!("Failed to get file from catalog: {e}"))
     };
 
-    // send peer file name so it can properly save the file
-    if let Err(e) = send_file_name(&file_path, &cipher, nonce, stream) {
-        return Err(format!("Failed to send file name to peer: {e}"));
+    // send peer file name to properly save the file and size to know how many bytes to expect
+    if let Err(e) = send_file_metadata(&file_path, &cipher, nonce, stream) {
+        return Err(format!("Failed to send file name and hash to peer: {e}"));
     }
 
     // read file
@@ -432,6 +443,7 @@ fn fulfill_file_request(
 }
 
 
+
 /// An asynchronous task that handles sending a file over `stream`
 pub async fn start_sender_task(mut stream: TcpStream) {
     // println!("Connecting to {:?}...", stream.peer_addr().unwrap());
@@ -454,19 +466,16 @@ pub async fn start_sender_task(mut stream: TcpStream) {
             eprintln!("Incorrect number of bytes received for peer's public key. Expected {} bytes but recieved {} bytes", public_key_bytes.len(), n);
             return;
         },
-        Ok(_) => {},
+        Ok(_) => (),
         Err(e) => {
             eprintln!("Failed to read peer's public key: {e}");
             return;
         }
     };
 
-    let peer_public_key = PublicKey::from(public_key_bytes);
-
-    // compute and save shared secret
-    let dh_shared_secret = dh_private_key.diffie_hellman(&peer_public_key);
-
     // generate and store AES cipher
+    let peer_public_key = PublicKey::from(public_key_bytes);
+    let dh_shared_secret = dh_private_key.diffie_hellman(&peer_public_key);
     let key = Key::<Aes256Gcm>::from_slice(dh_shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
     let mut nonce = [0u8; 12];

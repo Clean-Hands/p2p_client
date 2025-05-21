@@ -1,6 +1,6 @@
 //! file_rw.rs
 //! by Lazuli Kleinhans, Ruben Boero
-//! May 19th, 2025
+//! May 20th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
@@ -108,6 +108,26 @@ pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
         Ok(f) => Ok(f),
         Err(e) => return Err(format!("Couldn't open file: {e}"))
     }
+}
+
+
+
+/// Returns the size of a given file in bytes by reading the file's metadata
+/// 
+/// *does not read entire file into memory*
+/// 
+pub fn get_file_size(file_path: &PathBuf) -> Result<u64, String> {
+    let file = match File::open(file_path) {
+        Ok(f) => f,
+        Err(e) => return Err(format!("Failed to open file in get_file_size(): {e}"))
+    };
+
+    let metadata = match file.metadata() {
+        Ok(m) => m,
+        Err(e) => return Err(format!("Failed to get metadata for: {e}"))
+    };
+
+    Ok(metadata.len())
 }
 
 

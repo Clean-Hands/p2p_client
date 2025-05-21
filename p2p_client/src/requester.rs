@@ -14,15 +14,18 @@ use directories::ProjectDirs;
 use hex;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
-use std::time::Duration;
 use x25519_dalek::{EphemeralSecret, PublicKey};
+use std::time::{Instant, Duration};
 
 type CatalogMap = HashMap<String, String>;
 type PeerMap = HashMap<String, String>;
+
+const SPINNER: &[char] = &['|', '/', '-', '\\'];
+const BAR_WIDTH: usize = 30;
 
 
 
@@ -406,12 +409,12 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 
 
 
-/// Receives file name from the sender
-fn await_file_name(
+/// Receives file name and its size from the sender
+fn await_file_metadata(
     cipher: &Aes256Gcm,
     nonce: &mut [u8; 12],
     mut stream: &TcpStream,
-) -> Result<String, String> {
+) -> Result<(String, f64), String> {
     // listen for file name
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
     if let Err(e) = stream.read(&mut buffer) {
@@ -427,7 +430,47 @@ fn await_file_name(
     };
     let file_path = String::from_utf8_lossy(file_path_packet.data.as_slice());
 
-    Ok(String::from(file_path))
+    // listen for the file size
+    if let Err(e) = stream.read(&mut buffer) {
+        return Err(format!("Failed to read from stream: {e}"));
+    }
+    let packet_bytes = match encryption::decrypt_message(nonce, &cipher, &buffer) {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
+    };
+    let file_size_packet = match packet::decode_packet(packet_bytes) {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to decode packet: {e}"))
+    };
+    let file_size_array: [u8; 8] = file_size_packet.data.try_into().expect("Vec must have exactly 8 elements");
+    let file_size = u64::from_be_bytes(file_size_array);
+
+    Ok((String::from(file_path), file_size as f64))
+}
+
+
+
+/// prints a download progress bar to stdout (every 100ms)
+fn print_loading_bar(bytes_sent: f64, total_bytes: f64, tick: usize) {
+    let percent = bytes_sent / total_bytes;
+    let filled = (percent as f64 * BAR_WIDTH as f64).round() as usize;
+    let empty = BAR_WIDTH - filled;
+    let spinner = SPINNER[tick % SPINNER.len()];
+
+    let progress_bar = format!(
+        "[{}{}]",
+        "=".repeat(filled),
+        " ".repeat(empty)
+    );
+
+    print!(
+        "\r{} {} {:>5.1}%",
+        spinner,
+        progress_bar,
+        percent as f64 * 100.0
+    );
+
+    let _ = io::stdout().flush();
 }
 
 
@@ -442,12 +485,15 @@ fn save_incoming_file(
 ) -> Result<(), String> {
 
     println!("Waiting on file metadata...");
-    let file_name = match await_file_name(&cipher, nonce, &stream) {
+    let file_metadata = match await_file_metadata(&cipher, nonce, &stream) {
         Ok(output) => output,
         Err(e) => return Err(e)
     };
     println!("File metadata received");
     
+    let file_name = file_metadata.0;
+    let file_size = file_metadata.1;
+
     // read file
     save_path.push(&file_name);
     let mut file = match file_rw::open_writable_file(&save_path) {
@@ -458,17 +504,22 @@ fn save_incoming_file(
     println!("Downloading \"{file_name}\"...");
 
     // read bytes until peer disconnects
+    let mut curr_bytes_read: f64 = 0.0;
+    let mut tick = 0;
+    let mut last_update = Instant::now();
+    let update_interval = Duration::from_millis(100);
     loop {
         let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
         match stream.read_exact(&mut buffer) {
             Ok(_) => (),
             Err(e) if e.kind() == ErrorKind::UnexpectedEof =>  {
                 // End connection
+                println!("\r✓ [{}]  100.0%", "=".repeat(BAR_WIDTH));
                 println!("Peer {} disconnected", stream.peer_addr().unwrap());
 
                 // verify file hash is correct
                 if let Err(e) = file.sync_all() {
-                    return Err(format!("Failed to ensure all data written to file: {e}"));
+                    return Err(format!("Failed to ensure all data was written to file: {e}"));
                 }
 
                 println!("Verifying file integrity...");
@@ -495,25 +546,32 @@ fn save_incoming_file(
             Err(e) => return Err(format!("Failed to read from stream: {e}"))
         };
 
-        // decrypt
-        let plaintext = match encryption::decrypt_message(nonce, &cipher, &buffer) {
+        let packet_bytes = match encryption::decrypt_message(nonce, &cipher, &buffer) {
             Ok(p) => p,
             Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
         };
 
-        let received_packet = match packet::decode_packet(plaintext) {
+        let received_packet = match packet::decode_packet(packet_bytes) {
             Ok(p) => p,
             Err(e) => return Err(format!("Unable to decode packet: {e}"))
         };
 
-        let data_bytes = received_packet.data.len();
+        let data_bytes: f64 = received_packet.data_length.into();
+        curr_bytes_read += data_bytes;
         match file.write(&received_packet.data) {
             Ok(n) => {
-                if n != data_bytes {
+                if n as f64 != data_bytes {
                     return Err(format!("Read {data_bytes} file bytes from stream, was only able to write {n} bytes to file"))
                 }
             },
             Err(e) => return Err(format!("Failed to write byte to file: {e}"))
+        }
+
+        // update loading bar if 100ms has elapsed
+        if last_update.elapsed() >= update_interval {
+            print_loading_bar(curr_bytes_read, file_size, tick);
+            tick += 1;
+            last_update = Instant::now();
         }
     }
 }
