@@ -558,13 +558,8 @@ fn save_incoming_file(
 
         let data_bytes: f64 = received_packet.data_length.into();
         curr_bytes_read += data_bytes;
-        match file.write(&received_packet.data) {
-            Ok(n) => {
-                if n as f64 != data_bytes {
-                    return Err(format!("Read {data_bytes} file bytes from stream, was only able to write {n} bytes to file"))
-                }
-            },
-            Err(e) => return Err(format!("Failed to write byte to file: {e}"))
+        if let Err(e) = file.write_all(&received_packet.data) {
+            return Err(format!("Failed to write byte to file: {e}"))
         }
 
         // update loading bar if 100ms has elapsed
