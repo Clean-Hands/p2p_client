@@ -246,7 +246,7 @@ pub fn view_peer_list() -> Result<(), String> {
 pub fn ping_addr(addr: &String) -> Result<String, String> {
     let send_addr = format!("{addr}:7878");
 
-    println!("Attempting to ping {send_addr}...");
+    // println!("Attempting to ping {send_addr}...");
 
     match TcpStream::connect(&send_addr) {
         Ok(_) => return Ok(format!("{addr} is online!")),
@@ -294,7 +294,7 @@ fn connect_stream(addr: &String) -> TcpStream {
     let send_addr = format!("{addr}:7878");
     // loop until connection is successful
     loop {
-        println!("Attempting to connect to {send_addr}...");
+        // println!("Attempting to connect to {send_addr}...");
         match TcpStream::connect(&send_addr) {
             Ok(s) => {
                 println!("Connected to {send_addr}");
@@ -488,12 +488,10 @@ fn save_incoming_file(
     hash: &String
 ) -> Result<(), String> {
 
-    println!("Waiting on file metadata...");
     let file_metadata = match await_file_metadata(&cipher, nonce, &stream) {
         Ok(output) => output,
         Err(e) => return Err(e)
     };
-    println!("File metadata received");
     
     let file_name = file_metadata.0;
     let file_size = file_metadata.1;
@@ -519,22 +517,19 @@ fn save_incoming_file(
             Err(e) if e.kind() == ErrorKind::UnexpectedEof =>  {
                 // End connection
                 println!("\r✓ [{}] 100.0% {}", "=".repeat(BAR_WIDTH), " ".repeat(25));
-                println!("Peer {} disconnected", stream.peer_addr().unwrap());
 
                 // verify file hash is correct
                 if let Err(e) = file.sync_all() {
                     return Err(format!("Failed to ensure all data was written to file: {e}"));
                 }
 
-                println!("Verifying file integrity...");
                 let hash_bytes = match file_rw::read_file_bytes(&save_path) {
                     Ok(b) => b,
                     Err(e) => return Err(e)
                 };
                 let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
 
-                // computed file hash is raw bytes but hash is hexadecimal, so convert hash to 
-                // raw bytes to match
+                // computed file hash is raw bytes but hash is hexadecimal, so convert hash to raw bytes to match
                 let expected_hash = match hex::decode(hash) {
                     Ok(b) => b,
                     Err(e) => return Err(format!("Failed to decode hash into raw bytes from hex: {e}")),
@@ -597,16 +592,12 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
         return;
     }
 
-    println!("Sending file request...");
-
     // send file hash
     let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet) {
         eprintln!("{e}");
         return;
     }
-    println!("File request sent");
-
 
     // start receiving file packets, saving it in the directory file_path
     if let Err(e) = save_incoming_file(&cipher, &mut nonce, stream, file_path.clone(), &hash) {

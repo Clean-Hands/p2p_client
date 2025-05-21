@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 20th, 2025
+//! May 21th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -480,7 +480,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     let cipher = Aes256Gcm::new(key);
     let mut nonce = [0u8; 12];
 
-    println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
+    // println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
 
     // listen for the mode packet sent
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
@@ -508,15 +508,13 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     // split tasks depending on mode sent by requester
     match String::from_utf8(mode_packet.data) {
         Ok(m) if m == "request_catalog" => {
-            println!("Peer requested catalog");
             if let Err(e) = fulfill_catalog_request(&mut stream, &mut nonce, &cipher) {
                 eprintln!("Failed to fulfill catalog request: {e}");
             } else {
-                println!("Catalog successfully sent")
+                println!("Catalog sent to {:?}", stream.peer_addr().unwrap())
             }
         },
         Ok(m) if m == "request_file" => {
-            println!("Peer requested a file");
             if let Err(e) = fulfill_file_request(&mut stream, &mut nonce, &cipher) {
                 eprintln!("Failed to fulfill file request: {e}");
             }
