@@ -7,7 +7,7 @@ use byteorder::{BigEndian, ByteOrder};
 use sha2::{Digest, Sha256};
 use std::mem;
 
-pub const PACKET_SIZE: usize = 512;
+pub const PACKET_SIZE: usize = 1024;
 
 
 
@@ -68,8 +68,8 @@ pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
     
     // append data length
     let data_length: u16 = (mem::size_of::<u16>() + data.len()) as u16;
-    if data_length > (PACKET_SIZE-2) as u16 {
-        eprintln!("Data length of \"{data_length}\" is larger than maximum data capacity of \"{}\"", PACKET_SIZE-2);
+    if data_length > PACKET_SIZE as u16 {
+        eprintln!("Data length of \"{data_length}\" is larger than maximum packet size of \"{PACKET_SIZE}\"");
     }
     let data_length_bytes: [u8; 2] = data_length.to_be_bytes();
     packet[offset..offset + mem::size_of::<u16>()].copy_from_slice(&data_length_bytes);

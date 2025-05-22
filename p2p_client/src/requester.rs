@@ -453,9 +453,9 @@ fn await_file_metadata(
 
 
 /// prints a download progress bar to stdout (every 100ms)
-fn print_loading_bar(bytes_sent: f64, total_bytes: f64, tick: usize) {
+fn print_loading_bar(bytes_sent: f64, total_bytes: f64, bytes_per_sec: usize, tick: usize) {
     let percent = bytes_sent / total_bytes;
-    let filled = (percent as f64 * BAR_WIDTH as f64).round() as usize;
+    let filled = ((percent * BAR_WIDTH as f64).round() as usize).clamp(0, BAR_WIDTH);
     let empty = BAR_WIDTH - filled;
     let spinner = SPINNER[tick % SPINNER.len()];
 
@@ -466,8 +466,9 @@ fn print_loading_bar(bytes_sent: f64, total_bytes: f64, tick: usize) {
     );
 
     print!(
-        "\r{} {} {:>5.1}% {:>10}/{}", // format the percent right-defined, field width of 5 characters, and show one decimal place
+        "\r{} {:>8}/s {} {:>5.1}% {:>10}/{}", // format the percent right-defined, field width of 5 characters, and show one decimal place
         spinner,
+        Size::from_bytes(bytes_per_sec).to_string(),
         progress_bar,
         (percent * 100.0).clamp(0.0, 100.0),
         Size::from_bytes(bytes_sent).to_string(),
@@ -510,13 +511,14 @@ fn save_incoming_file(
     let mut tick = 0;
     let mut last_update = Instant::now();
     let update_interval = Duration::from_millis(UPDATE_DELAY_MS);
+    let mut bytes_per_sec = 0;
     loop {
         let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
         match stream.read_exact(&mut buffer) {
             Ok(_) => (),
             Err(e) if e.kind() == ErrorKind::UnexpectedEof =>  {
                 // End connection
-                println!("\r✓ [{}] 100.0% {}", "=".repeat(BAR_WIDTH), " ".repeat(25));
+                println!("\r✓ [{}] 100.0% {}", "=".repeat(BAR_WIDTH), " ".repeat(35));
 
                 // verify file hash is correct
                 if let Err(e) = file.sync_all() {
@@ -555,16 +557,20 @@ fn save_incoming_file(
             Err(e) => return Err(format!("Unable to decode packet: {e}"))
         };
 
-        let data_bytes: f64 = received_packet.data_length.into();
-        curr_bytes_read += data_bytes;
+        let data_bytes_delta: f64 = received_packet.data_length.into();
+        curr_bytes_read += data_bytes_delta;
         if let Err(e) = file.write_all(&received_packet.data) {
             return Err(format!("Failed to write byte to file: {e}"))
         }
 
-        // update loading bar if 100ms has elapsed
+        bytes_per_sec += data_bytes_delta as usize;
+
+        // update loading bar if UPDATE_DELAY_MS has elapsed
         if last_update.elapsed() >= update_interval {
-            print_loading_bar(curr_bytes_read, file_size, tick);
+            bytes_per_sec *= 1000/UPDATE_DELAY_MS as usize;
+            print_loading_bar(curr_bytes_read, file_size, bytes_per_sec, tick);
             tick += 1;
+            bytes_per_sec = 0;
             last_update = Instant::now();
         }
     }
