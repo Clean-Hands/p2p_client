@@ -332,8 +332,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
     let mut catalog_bytes = Vec::new();
     loop {
-        match stream.read(&mut buffer) {
-            Ok(0) => break, // EOF
+        match stream.read_exact(&mut buffer) {
             Ok(_) => {
                 let decrypted = match encryption::decrypt_message(&mut nonce, &cipher, &buffer) {
                     Ok(p) => p,
@@ -347,6 +346,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
 
                 catalog_bytes.extend_from_slice(&packet.data);
             },
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(format!("Error reading from stream: {e}"))
         }
     }
@@ -426,7 +426,7 @@ fn await_file_metadata(
 ) -> Result<(String, u64), String> {
     // listen for file name
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
-    if let Err(e) = stream.read(&mut buffer) {
+    if let Err(e) = stream.read_exact(&mut buffer) {
         return Err(format!("Failed to read from stream: {e}"));
     }
     let file_path = match encryption::decrypt_message(nonce, &cipher, &buffer) {
@@ -440,7 +440,7 @@ fn await_file_metadata(
     let file_path = String::from_utf8_lossy(file_path_packet.data.as_slice());
 
     // listen for the file size
-    if let Err(e) = stream.read(&mut buffer) {
+    if let Err(e) = stream.read_exact(&mut buffer) {
         return Err(format!("Failed to read from stream: {e}"));
     }
     let packet_bytes = match encryption::decrypt_message(nonce, &cipher, &buffer) {

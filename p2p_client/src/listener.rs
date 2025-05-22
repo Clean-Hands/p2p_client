@@ -17,7 +17,7 @@ use serde_json;
 use size::Size;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use tokio::runtime::Runtime;
@@ -395,7 +395,7 @@ fn fulfill_file_request(
 ) -> Result<(), String> {
     // listen for hash of file to send
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
-    if let Err(e) = stream.read(&mut buffer) {
+    if let Err(e) = stream.read_exact(&mut buffer) {
         return Err(format!("Failed to read hash from stream: {e}"));
     }
 
@@ -475,13 +475,9 @@ pub async fn start_sender_task(mut stream: TcpStream) {
 
     // wait for public key response from listener
     let mut public_key_bytes: [u8; 32] = [0; 32];
-    match stream.read(&mut public_key_bytes) {
-        Ok(n) if n == 0 => return, // 0 bytes read indicates ping was sent, so do not continue connection
-        Ok(n) if n != public_key_bytes.len() => {
-            eprintln!("Incorrect number of bytes received for peer's public key. Expected {} bytes but recieved {} bytes", public_key_bytes.len(), n);
-            return;
-        },
+    match stream.read_exact(&mut public_key_bytes) {
         Ok(_) => (),
+        Err(e) if e.kind() == ErrorKind::UnexpectedEof => return, // indicates ping was sent, so do not continue connection
         Err(e) => {
             eprintln!("Failed to read peer's public key: {e}");
             return;
@@ -499,7 +495,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
 
     // listen for the mode packet sent
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
-    if let Err(e) = stream.read(&mut buffer) {
+    if let Err(e) = stream.read_exact(&mut buffer) {
         eprintln!("Failed to read from stream: {e}");
         return;
     }
