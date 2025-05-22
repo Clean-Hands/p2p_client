@@ -12,18 +12,26 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
+use serde::{Serialize, Deserialize};
 use size::Size;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read, Write};
 use std::net::TcpStream;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
-type CatalogMap = HashMap<String, String>;
 type PeerMap = HashMap<String, String>;
+type CatalogMap = HashMap<String, FileInfo>;
+
+#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+struct FileInfo {
+    file_path: String,
+    file_size: u64
+}
+
 
 const SPINNER: &[char] = &['|', '/', '-', '\\'];
 const BAR_WIDTH: usize = 50;
@@ -59,7 +67,7 @@ fn get_peer_list_path() -> Result<PathBuf, String> {
 
 /// Returns peer list as Hashmap given the absolute path to it
 /// If there is no peers.json file, creates the file and returns an empty Hashmap
-fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<CatalogMap, String> {
+fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<PeerMap, String> {
     let peer_list: PeerMap;
 
     if peer_list_path.exists() {
@@ -222,17 +230,11 @@ pub fn view_peer_list() -> Result<(), String> {
     );
 
     // print each catalog entry
-    for (hash, path) in peer_list.iter() {
-        let file_name = Path::new(path)
-            .file_name()
-            .and_then(|os_str| os_str.to_str())
-            .unwrap_or("invalid UTF-8");
-
+    for (ip, alias) in peer_list.iter() {
         println!(
-            "| {:<max_ip_len$} | {:<width$}",
-            hash,
-            file_name,
-            width = max_alias_len
+            "| {:<max_ip_len$} | {:<max_alias_len$}",
+            ip,
+            alias
         );
     }
 
@@ -297,7 +299,7 @@ fn connect_stream(addr: &String) -> TcpStream {
         // println!("Attempting to connect to {send_addr}...");
         match TcpStream::connect(&send_addr) {
             Ok(s) => {
-                println!("Connected to {send_addr}");
+                // println!("Connected to {send_addr}");
                 return s;
             }
             Err(e) => {
@@ -368,41 +370,46 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
     // dynamically determine max len name
     let max_name_len = catalog
         .values() // get iterator over the file paths stored in catalog
-        // for each path, get the name of the file and its length
-        .filter_map(|path| {
-            let name = Path::new(path).file_name()?.to_str()?;
-            Some(name.len())
-        })
+        // get the length of each file path
+        .map(|info| info.file_path.len())
         // make sure that we don't go under the length of the table header
         .filter(|length| length > &"File Name".len())
         .max()
         .unwrap_or("File Name".len());
 
+    // dynamically determine max size length
+    let max_size_len = catalog
+        .values()
+        .map(|info| Size::from_bytes(info.file_size).to_string().len())
+        .filter(|length| length > &"Size".len())
+        .max()
+        .unwrap_or("Size".len());
+
     let hash_len = 64;
 
+    // print table header
     println!(
-        "| {:<hash_len$} | {:<max_name_len$}",
+        "| {:<hash_len$} | {:<max_name_len$} | {:<max_size_len$}",
         "SHA-256 Hash",
-        "File Name"
+        "File Name",
+        "Size"
     );
 
-    // 2 gives space for the bar separating hash and path
+    // 2 gives space for the bars separating columns
     println!(
-        "|{}|{}",
+        "|{}|{}|{}",
         "=".repeat(2 + hash_len),
-        "=".repeat(2 + max_name_len)
+        "=".repeat(2 + max_name_len),
+        "=".repeat(2 + max_size_len)
     );
 
-    for (hash, path) in catalog {
-        let file_name = Path::new(&path)
-            .file_name()
-            .and_then(|os| os.to_str())
-            .unwrap_or("invalid UTF-8");
+    // print each catalog entry
+    for (hash, info) in catalog.iter() {
+        let file_size = Size::from_bytes(info.file_size).to_string();
 
         println!(
-            "| {:<hash_len$} | {:<max_name_len$}",
-            hash,
-            file_name
+            "| {:<hash_len$} | {:<max_name_len$} | {:<max_size_len$}",
+            hash, info.file_path, file_size
         );
     }
 
@@ -416,7 +423,7 @@ fn await_file_metadata(
     cipher: &Aes256Gcm,
     nonce: &mut [u8; 12],
     mut stream: &TcpStream,
-) -> Result<(String, f64), String> {
+) -> Result<(String, u64), String> {
     // listen for file name
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
     if let Err(e) = stream.read(&mut buffer) {
@@ -447,14 +454,14 @@ fn await_file_metadata(
     let file_size_array: [u8; 8] = file_size_packet.data.try_into().expect("Vec must have exactly 8 elements");
     let file_size = u64::from_be_bytes(file_size_array);
 
-    Ok((String::from(file_path), file_size as f64))
+    Ok((String::from(file_path), file_size))
 }
 
 
 
-/// prints a download progress bar to stdout (every 100ms)
-fn print_loading_bar(bytes_sent: f64, total_bytes: f64, bytes_per_sec: usize, tick: usize) {
-    let percent = bytes_sent / total_bytes;
+/// prints a download progress bar to stdout
+fn print_loading_bar(bytes_sent: u64, total_bytes: u64, bytes_per_sec: u64, tick: usize) {
+    let percent: f64 = bytes_sent as f64 / total_bytes as f64;
     let filled = ((percent * BAR_WIDTH as f64).round() as usize).clamp(0, BAR_WIDTH);
     let empty = BAR_WIDTH - filled;
     let spinner = SPINNER[tick % SPINNER.len()];
@@ -507,11 +514,11 @@ fn save_incoming_file(
     println!("Downloading \"{file_name}\"...");
 
     // read bytes until peer disconnects
-    let mut curr_bytes_read: f64 = 0.0;
+    let mut curr_bytes_read: u64 = 0;
     let mut tick = 0;
     let mut last_update = Instant::now();
     let update_interval = Duration::from_millis(UPDATE_DELAY_MS);
-    let mut bytes_per_sec = 0;
+    let mut bytes_per_sec: u64 = 0;
     loop {
         let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
         match stream.read_exact(&mut buffer) {
@@ -557,17 +564,17 @@ fn save_incoming_file(
             Err(e) => return Err(format!("Unable to decode packet: {e}"))
         };
 
-        let data_bytes_delta: f64 = received_packet.data_length.into();
+        let data_bytes_delta: u64 = received_packet.data_length.try_into().unwrap();
         curr_bytes_read += data_bytes_delta;
         if let Err(e) = file.write_all(&received_packet.data) {
             return Err(format!("Failed to write byte to file: {e}"))
         }
 
-        bytes_per_sec += data_bytes_delta as usize;
+        bytes_per_sec += data_bytes_delta;
 
         // update loading bar if UPDATE_DELAY_MS has elapsed
         if last_update.elapsed() >= update_interval {
-            bytes_per_sec *= 1000/UPDATE_DELAY_MS as usize;
+            bytes_per_sec *= 1000/UPDATE_DELAY_MS;
             print_loading_bar(curr_bytes_read, file_size, bytes_per_sec, tick);
             tick += 1;
             bytes_per_sec = 0;

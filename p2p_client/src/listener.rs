@@ -12,6 +12,9 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use size::Size;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -20,7 +23,22 @@ use std::path::{Path, PathBuf};
 use tokio::runtime::Runtime;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
-type CatalogMap = HashMap<String, String>; // hash is key, absolute file path is value
+type CatalogMap = HashMap<String, FileInfo>;
+
+#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+struct FileInfo {
+    file_path: String,
+    file_size: u64
+}
+
+impl FileInfo {
+    fn new(file_path: String, file_size: u64) -> FileInfo {
+        FileInfo {
+            file_path: file_path,
+            file_size: file_size
+        }
+    }
+}
 
 
 
@@ -130,8 +148,17 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     let file_hash = packet::compute_sha256_hash(&file_bytes);
     let file_hash_string: String = hex::encode(&file_hash);
 
+    // get size of file
+    let file_size  = match file_rw::get_file_size(&absolute_file_path) {
+        Ok(s) => s,
+        Err(e) => return Err(e)
+    };
+
+    // put file path and file size into a FileInfo object
+    let file_info = FileInfo::new(absolute_file_path.to_string_lossy().into_owned(), file_size);
+
     // add/update entry in catalog
-    catalog.insert(file_hash_string.clone(), absolute_file_path.to_string_lossy().into_owned());
+    catalog.insert(file_hash_string.clone(), file_info);
 
     if let Err(e) = write_updated_catalog(&catalog_path, &catalog) {
         return Err(format!("Error writing updated catalog: {}", e));
@@ -165,7 +192,7 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
         match catalog.remove(hash) {
             None => println!("Entry \"{hash}\" does not exist in catalog"),
             Some(f) => {
-                let file_name = PathBuf::from(f).file_name().unwrap().to_string_lossy().into_owned();
+                let file_name = PathBuf::from(f.file_path).file_name().unwrap().to_string_lossy().into_owned();
                 println!("Successfully removed {file_name} ({hash}) from catalog")
             }
         };
@@ -202,8 +229,8 @@ pub fn view_catalog() -> Result<(), String> {
     let max_name_len = catalog
         .values() // get iterator over the file paths stored in catalog
         // for each path, get the name of the file and its length
-        .filter_map(|path| {
-            let name = Path::new(path).file_name()?.to_str()?;
+        .filter_map(|info| {
+            let name = Path::new(&info.file_path).file_name()?.to_str()?;
             Some(name.len())
         })
         // make sure that we don't go under the length of the table header
@@ -211,34 +238,43 @@ pub fn view_catalog() -> Result<(), String> {
         .max()
         .unwrap_or("File Name".len());
 
+    // dynamically determine max size length
+    let max_size_len = catalog
+        .values()
+        .map(|info| Size::from_bytes(info.file_size).to_string().len())
+        .filter(|length| length > &"Size".len())
+        .max()
+        .unwrap_or("Size".len());
+
     // sha256 hashes are 64 characters long
     let hash_len = 64;
 
     // print table header
     println!(
-        "| {:<hash_len$} | {:<max_name_len$}",
-        "SHA-256 Hash",
-        "File Name"
+        "| {:<hash_len$} | {:<max_name_len$} | {:<max_size_len$}",
+        "SHA-256 Hash", "File Name", "Size"
     );
 
-    // 2 gives space for the bar separating hash and path
+    // 2 gives space for the bars separating columns
     println!(
-        "|{}|{}",
+        "|{}|{}|{}",
         "=".repeat(2 + hash_len),
-        "=".repeat(2 + max_name_len)
+        "=".repeat(2 + max_name_len),
+        "=".repeat(2 + max_size_len)
     );
 
     // print each catalog entry
-    for (hash, path) in catalog.iter() {
-        let file_name = Path::new(path)
+    for (hash, info) in catalog.iter() {
+        let file_name = Path::new(&info.file_path)
             .file_name()
             .and_then(|os_str| os_str.to_str())
             .unwrap_or("invalid UTF-8");
 
+        let file_size = Size::from_bytes(info.file_size).to_string();
+
         println!(
-            "| {:<hash_len$} | {:<max_name_len$}",
-            hash,
-            file_name
+            "| {:<hash_len$} | {:<max_name_len$} | {:<max_size_len$}",
+            hash, file_name, file_size
         );
     }
 
@@ -268,13 +304,13 @@ fn fulfill_catalog_request(
     let mut pathless_catalog = CatalogMap::new();
     if !catalog.is_empty() {
         // modify each catalog entry
-        for (hash, path) in catalog.iter() {
-            let file_name = Path::new(path)
+        for (hash, info) in catalog.iter() {
+            let file_name = Path::new(&info.file_path)
                 .file_name()
                 .and_then(|os_str| os_str.to_str())
                 .unwrap_or("invalid UTF-8")
                 .to_string();
-            pathless_catalog.insert(hash.clone(), file_name);
+            pathless_catalog.insert(hash.clone(), FileInfo::new(file_name, info.file_size));
         }
     }
     
@@ -341,12 +377,12 @@ pub fn get_file_from_catalog(hash: &String) -> Result<PathBuf, String> {
     };
 
     // get file path from catalog
-    let file_name = match catalog.get(hash) {
-        Some(f) => f.to_owned(),
+    let file_path = match catalog.get(hash) {
+        Some(i) => i.file_path.to_owned(),
         None => return Err(format!("Requested file does not exist in catalog"))
     };
 
-    Ok(PathBuf::from(file_name))
+    Ok(PathBuf::from(file_path))
 }
 
 
