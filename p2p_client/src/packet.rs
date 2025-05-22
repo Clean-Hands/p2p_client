@@ -1,6 +1,6 @@
 //! packet.rs
 //! by Ruben Boero, Liam Keane, Lazuli Kleinhans
-//! May 19th, 2025
+//! May 21th, 2025
 //! CS347 Advanced Software Design
 
 use byteorder::{BigEndian, ByteOrder};
@@ -17,7 +17,7 @@ pub const PACKET_SIZE: usize = 512;
 #[derive(Default, Debug, PartialEq)]
 pub struct Packet {
     pub data_length: u16,
-    pub data: Vec<u8> // up to PACKET_SIZE-2 (510) bytes
+    pub data: Vec<u8> // up to PACKET_SIZE-2 bytes
 }
 
 
@@ -62,13 +62,15 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 /// `data`: a `Vec<u8>` of bytes to be sent
 ///
 /// Output: a properly formatted array of bytes to send
-// TODO: check that data doesn't exceed 510 bytes
 pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
     let mut packet = [0u8; PACKET_SIZE];
     let mut offset = 0;
-
+    
     // append data length
     let data_length: u16 = (mem::size_of::<u16>() + data.len()) as u16;
+    if data_length > (PACKET_SIZE-2) as u16 {
+        eprintln!("Data length of \"{data_length}\" is larger than maximum data capacity of \"{}\"", PACKET_SIZE-2);
+    }
     let data_length_bytes: [u8; 2] = data_length.to_be_bytes();
     packet[offset..offset + mem::size_of::<u16>()].copy_from_slice(&data_length_bytes);
     offset += mem::size_of::<u16>();
@@ -76,7 +78,7 @@ pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
     // append data
     packet[offset..offset + data.len()].copy_from_slice(&data);
 
-    packet // return the encoded packet
+    packet
 }
 
 
@@ -91,27 +93,8 @@ mod tests {
     #[test]
     fn test_encode_packet() {
         let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
-        let actual: [u8; PACKET_SIZE] = packet::encode_packet(data);
-        let expected: [u8; PACKET_SIZE] = [
-            0, 13, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
+        let actual: [u8; PACKET_SIZE] = packet::encode_packet(data.clone());
+        let expected: [u8; PACKET_SIZE] = [vec![0, 13], data, vec![0u8; PACKET_SIZE-13]].concat().try_into().unwrap();
 
         assert_eq!(actual, expected);
     }
@@ -141,7 +124,7 @@ mod tests {
 
         let result = packet::decode_packet(packet_bytes);
 
-        let expected_error = format!("Data length of '{data_len}' is larger than maximum packet size of '{PACKET_SIZE}'");
+        let expected_error = format!("Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\"");
 
         assert_eq!(result, Err(expected_error));
     }
