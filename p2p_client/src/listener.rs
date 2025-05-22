@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 21th, 2025
+//! May 22nd, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -47,27 +47,6 @@ fn get_catalog_path() -> Result<PathBuf, String> {
 
     Ok(catalog_path)
 }
-
-// Lazuli's modifications to fulfill_catalog_request() (removing absolute paths from catalog before sending)
-// rendered this function unused. Do we still want to keep it around for other use cases?
-
-/// Returns catalog as Vector of bytes given the absolute path to it
-// fn get_serialized_catalog(catalog_path: &PathBuf) -> Result<Vec<u8>, String> {
-//     if catalog_path.exists() {
-//         match fs::read(&catalog_path) {
-//             Ok(bytes) => Ok(bytes),
-//             Err(e) => Err(e.to_string()),
-//         }
-//     } else {
-//         // create the file if it doesn't exist
-//         let empty_catg: CatalogMap = HashMap::new();
-//         write_updated_catalog(catalog_path, &empty_catg)?;
-//         match fs::read(&catalog_path) {
-//             Ok(bytes) => Ok(bytes),
-//             Err(e) => Err(e.to_string()),
-//         }
-//     }
-// }
 
 
 
