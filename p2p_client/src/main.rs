@@ -68,7 +68,8 @@ enum ListenCommand {
     ViewCatalog {}
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
     match cli.mode {
         // parse the request subcommand
@@ -78,11 +79,13 @@ fn main() {
                 file_hash,
                 save_path
             } => {
-                requester::request_file(
+                if let Err(e) = requester::request_file(
                     peer_address,
                     file_hash,
                     save_path.unwrap_or(PathBuf::from("."))
-                );
+                ) {
+                    eprintln!("Failed to request file: {e}");
+                }
             },
             RequestCommand::Catalog { peer_address } => {
                 if let Err(e) = requester::request_catalog(&peer_address) {
@@ -127,7 +130,9 @@ fn main() {
         // parse the listen subcommand
         Mode::Listen { command } => match command {
             ListenCommand::Start {} => {
-                listener::start_listening();
+                if let Err(e) = listener::start_listening().await {
+                    eprintln!("Error while listening: {e}");
+                }
             },
             ListenCommand::ViewCatalog {} => {
                 if let Err(e) = listener::view_catalog() {

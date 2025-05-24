@@ -20,7 +20,7 @@ use std::fs::{self, File};
 use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use tokio::runtime::Runtime;
+// use tokio::runtime::Runtime;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type CatalogMap = HashMap<String, FileInfo>;
@@ -437,6 +437,8 @@ fn fulfill_file_request(
         for _ in 0..max_bytes {
             match file_bytes.next() {
                 Some(Ok(b)) => write_bytes.push(b),
+                // what should behavior be if fail to read next byte? do we want to continue the loop?
+                // or do we need to return an error?
                 Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
                 None => {
                     // when trying to read the next byte, we read EOF so send the last packet and return
@@ -460,7 +462,7 @@ fn fulfill_file_request(
 
 
 /// An asynchronous task that handles sending a file over `stream`
-pub async fn start_sender_task(mut stream: TcpStream) {
+pub async fn start_sender_task(mut stream: TcpStream) -> Result<(), String> {
     // println!("Connecting to {:?}...", stream.peer_addr().unwrap());
 
     // carry out DH exchange
@@ -469,18 +471,18 @@ pub async fn start_sender_task(mut stream: TcpStream) {
 
     // send public key to listener
     if let Err(e) = stream.write_all(dh_public_key.as_bytes()) {
-        eprintln!("Failed to send DH public key: {e}");
-        return;
+        return Err(format!("Failed to send DH public key: {e}"));
     }
 
     // wait for public key response from listener
     let mut public_key_bytes: [u8; 32] = [0; 32];
     match stream.read_exact(&mut public_key_bytes) {
         Ok(_) => (),
-        Err(e) if e.kind() == ErrorKind::UnexpectedEof => return, // indicates ping was sent, so do not continue connection
+        Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
+            return Ok(()); // indicates ping was sent, so do not continue connection
+        },
         Err(e) => {
-            eprintln!("Failed to read peer's public key: {e}");
-            return;
+            return Err(format!("Failed to read peer's public key: {e}"));
         }
     };
 
@@ -496,23 +498,20 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     // listen for the mode packet sent
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
     if let Err(e) = stream.read_exact(&mut buffer) {
-        eprintln!("Failed to read from stream: {e}");
-        return;
+        return Err(format!("Failed to read from stream: {e}"));
     }
 
     let mode_packet = match encryption::decrypt_message(&mut nonce, &cipher, &buffer) {
         Ok(h) => h,
         Err(e) => {
-            eprintln!("Failed to decrypt ciphertext of mode packet: {e}");
-            return;
+            return Err(format!("Failed to decrypt ciphertext of mode packet: {e}"));
         }
     };
 
     let mode_packet = match packet::decode_packet(mode_packet) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("Unable to decode mode packet: {e}");
-            return;
+            return Err(format!("Unable to decode mode packet: {e}"));
         }
     };
 
@@ -520,31 +519,27 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     match String::from_utf8(mode_packet.data) {
         Ok(m) if m == "request_catalog" => {
             if let Err(e) = fulfill_catalog_request(&mut stream, &mut nonce, &cipher) {
-                eprintln!("Failed to fulfill catalog request: {e}");
+                return Err(format!("Failed to fulfill catalog request: {e}"));
             } else {
                 println!("Catalog sent to {:?}", stream.peer_addr().unwrap())
             }
         },
         Ok(m) if m == "request_file" => {
             if let Err(e) = fulfill_file_request(&mut stream, &mut nonce, &cipher) {
-                eprintln!("Failed to fulfill file request: {e}");
+                return Err(format!("Failed to fulfill file request: {e}"));
             }
         },
         Ok(_) => (),
         Err(e) => {
-            eprintln!("Failed to read mode: {e}");
-            return;
+            return Err(format!("Failed to read mode: {e}"));
         }
     }
+    Ok(())
 }
 
 
 
-pub fn start_listening() {
-    // Create and enter a new async runtime
-    let runtime = Runtime::new().expect("Failed to create a runtime");
-    let _ = runtime.enter();
-
+pub async fn start_listening() -> Result<(), String> {
     println!("Starting listener...");
     let listen_addr = String::from("0.0.0.0:7878");
     let listener = match TcpListener::bind(&listen_addr) {
@@ -553,8 +548,7 @@ pub fn start_listening() {
             l
         },
         Err(e) => {
-            eprintln!("Failed to bind: {}", e);
-            return;
+            return Err(format!("Failed to bind: {e}"));
         }
     };
     println!("Successfully started listener");
@@ -564,7 +558,7 @@ pub fn start_listening() {
         let stream = match stream {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("Failed to accept connection: {e}");
+                println!("Failed to accept connection: {e}");
                 continue;
             }
         };
@@ -572,6 +566,10 @@ pub fn start_listening() {
         // println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
 
         // spawn a new task for each incoming stream to handle more than one connection
-        runtime.spawn(start_sender_task(stream));
+        if let Err(e) = start_sender_task(stream).await {
+            return Err(format!("Sender task failed: {e}"))
+        }
     }
+
+    Ok(())
 }

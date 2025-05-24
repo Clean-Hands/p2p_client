@@ -303,7 +303,7 @@ fn connect_stream(addr: &String) -> TcpStream {
                 return s;
             }
             Err(e) => {
-                eprintln!("Failed to connect to {send_addr}: {e}");
+                println!("Failed to connect to {send_addr}: {e}");
                 sleep(Duration::from_secs(1));
             }
         };
@@ -586,14 +586,13 @@ fn save_incoming_file(
 
 
 /// Send a request for a file by its `hash` to the IP `addr`, saving it in `file_path`
-pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
+pub fn request_file(addr: String, hash: String, file_path: PathBuf) -> Result<(), String> {
     let mut stream = connect_stream(&addr);
 
     let cipher = match perform_dh_handshake(&stream) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Diffie-Hellman handshake failed: {e}");
-            return;
+            return Err(format!("Diffie-Hellman handshake failed: {e}"));
         }
     };
     let mut nonce: [u8; 12] = [0; 12];
@@ -601,19 +600,19 @@ pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
     // send mode packet
     let req_catalog_packet = packet::encode_packet(String::from("request_file").into_bytes());
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet) {
-        eprintln!("Failed to send request for sender catalog {e}");
-        return;
+        return Err(format!("Diffie-Hellman handshake failed: {e}"));
     }
 
     // send file hash
     let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet) {
-        eprintln!("{e}");
-        return;
+        return Err(format!("Failed to send to connection: {e}"));
     }
 
     // start receiving file packets, saving it in the directory file_path
     if let Err(e) = save_incoming_file(&cipher, &mut nonce, stream, file_path.clone(), &hash) {
-        eprintln!("{e}");
+        return Err(format!("Failed to save incoming file: {e}"));
     }
+
+    Ok(())
 }
