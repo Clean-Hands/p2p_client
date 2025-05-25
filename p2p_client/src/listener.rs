@@ -437,9 +437,9 @@ fn fulfill_file_request(
         for _ in 0..max_bytes {
             match file_bytes.next() {
                 Some(Ok(b)) => write_bytes.push(b),
-                // what should behavior be if fail to read next byte? do we want to continue the loop?
-                // or do we need to return an error?
-                Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
+                Some(Err(e)) => {
+                    return Err(format!("Unable to read next byte: {e}"));
+                }
                 None => {
                     // when trying to read the next byte, we read EOF so send the last packet and return
                     let message = packet::encode_packet(write_bytes);

@@ -130,6 +130,7 @@ async fn main() {
         // parse the listen subcommand
         Mode::Listen { command } => match command {
             ListenCommand::Start {} => {
+                // THIS BREAKS MULTI THREADING, TURNS IT SINGLE THREADED
                 if let Err(e) = listener::start_listening().await {
                     eprintln!("Error while listening: {e}");
                 }
