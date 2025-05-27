@@ -35,23 +35,23 @@ enum Mode {
 
 #[derive(Subcommand)]
 enum RequestCommand {
-    #[command(about = "Request a file from a peer")]
+    #[command(about = "Request a file from a peer. Peer can be an alias added using 'add-ip' or an IP address")]
     File {
-        peer_address: String,
+        peer: String,
         file_hash: String,
         save_path: Option<PathBuf>
     },
-    #[command(about = "Request the catalog of a specific peer")]
-    Catalog { peer_address: String },
-    #[command(about = "Check if a specific peer is available for requests")]
-    Ping { peer_address: String },
-    #[command(about = "Add an IP and an optional alias to your list of known peers")]
+    #[command(about = "Request the catalog of a specific peer. Peer can be an alias added using 'add-ip' or an IP address")]
+    Catalog { peer: String },
+    #[command(about = "Check if a specific peer is available for requests. Peer can be an alias added using 'add-ip' or an IP address")]
+    Ping { peer: String },
+    #[command(about = "Add an alias and an associated IP to your list of known peers")]
     AddIP {
-        peer_address: String,
-        alias: Option<String>
+        alias: String,
+        peer_address: String
     },
     #[command(about = "Remove an IP from your list of known peers")]
-    RemoveIP { peer_address: String },
+    RemoveIP { peer: String },
     #[command(about = "View your local list of known peers")]
     ViewIPS {}
 }
@@ -74,23 +74,23 @@ fn main() {
         // parse the request subcommand
         Mode::Request { command } => match command {
             RequestCommand::File {
-                peer_address,
+                peer,
                 file_hash,
                 save_path
             } => {
                 requester::request_file(
-                    peer_address,
+                    peer,
                     file_hash,
                     save_path.unwrap_or(PathBuf::from("."))
                 );
             },
-            RequestCommand::Catalog { peer_address } => {
-                if let Err(e) = requester::request_catalog(&peer_address) {
+            RequestCommand::Catalog { peer } => {
+                if let Err(e) = requester::request_catalog(&peer) {
                     eprintln!("Error while requesting catalog: {e}")
                 }
             },
-            RequestCommand::Ping { peer_address } => {
-                match requester::ping_addr(&peer_address) {
+            RequestCommand::Ping { peer } => {
+                match requester::ping_addr(&peer) {
                     Ok(result) => {
                         println!("{result}")
                     },
@@ -99,19 +99,20 @@ fn main() {
                     }
                 };
             },
+            // TODO: do we want to change the name of the below command since we're using the alias
+            // as the key rather than the IP, or do we still want to emphasize that the IP is what
+            // is important?
             RequestCommand::AddIP {
-                peer_address,
-                alias
+                alias,
+                peer_address
             } => {
-                // if no alias is specified, use the peer address
-                let alias = alias.unwrap_or(peer_address.clone());
-                if let Err(e) = requester::add_ip_to_peers(&peer_address, &alias) {
+                if let Err(e) = requester::add_ip_to_peers(&alias, &peer_address) {
                     eprintln!("Error adding IP to list of peers: {e}");
                     return;
                 }
             },
-            RequestCommand::RemoveIP { peer_address } => {
-                if let Err(e) = requester::remove_ip_from_peer_list(&peer_address) {
+            RequestCommand::RemoveIP { peer } => {
+                if let Err(e) = requester::remove_ip_from_peer_list(&peer) {
                     eprintln!("Error removing IP from list of peers: {e}");
                     return;
                 }
