@@ -7,7 +7,7 @@ use byteorder::{BigEndian, ByteOrder};
 use sha2::{Digest, Sha256};
 use std::mem;
 
-pub const PACKET_SIZE: usize = 1024 * 8; // 8KB
+pub const PACKET_SIZE: usize = 1024 * 16 ; // 16KB
 
 
 

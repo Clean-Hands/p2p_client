@@ -422,25 +422,22 @@ fn fulfill_file_request(
         return Err(format!("Failed to send file name and hash to peer: {e}"));
     }
 
-    // read file
-    // let mut file_bytes = match file_rw::open_iterable_file(&file_path) {
-    //     Ok(b) => b,
-    //     Err(e) => return Err(format!("Unable to open file: {e}"))
-    // };
-
     let file = match File::open(&file_path) {
         Ok(f) => f,
         Err(e) => return Err(format!("Couldn't open file: {e}"))
     };
-    let mmap = unsafe { Mmap::map(&file).unwrap() };
+
+    let mmap = match unsafe { Mmap::map(&file) } {
+        Ok(m) => m,
+        Err(e) => return Err(format!("Couldn't open memory map: {e}"))
+    };
 
     println!("Sending {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
 
-    // write packets until EOF
+    // write packets
     loop {
         // subtract 2 for the data_length bytes
-        let max_bytes = packet::PACKET_SIZE - 2;
-        for chunk in mmap.chunks(max_bytes) {
+        for chunk in mmap.chunks(packet::PACKET_SIZE - 2) {
             // encode the data and send the packet
             let message = packet::encode_packet(chunk.to_vec());
             if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) {

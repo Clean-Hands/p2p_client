@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 21st, 2025
+//! May 27th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -303,7 +303,7 @@ fn connect_stream(addr: &String) -> TcpStream {
     let send_addr = format!("{addr}:7878");
     // loop until connection is successful
     loop {
-        // println!("Attempting to connect to {send_addr}...");
+        println!("Attempting to connect to {send_addr}...");
         match TcpStream::connect(&send_addr) {
             Ok(s) => {
                 // println!("Connected to {send_addr}");
