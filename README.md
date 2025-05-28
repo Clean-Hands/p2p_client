@@ -86,7 +86,8 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
     - `cargo run request catalog <peer IP address or alias>`
   - Check if a specific peer is listening for requests.
     - `cargo run request ping <peer IP address or alias>`
-  - Add an IP to your list of known peers. The purpose of this command is to allow the user to associate IPs with a more human readable alias. Once added to the list of peers, the alias can be used in place of an IP. For example, you could add 'localhost' as an alias for '127.0.0.1', allowing you to type localhost in place of the IP address in all places where an IP address is required.
+  - Add an IP to your list of known peers.
+    - The purpose of this command is to allow the user to associate IPs with a more human readable alias. Once added to the list of peers, the alias can be used in place of an IP. For example, you could add 'localhost' as an alias for '127.0.0.1', allowing you to type localhost in place of the IP address in all places where an IP address is required.
     - `cargo run request add-ip <alias> <peer IP address>`
   - Remove an IP from your lsit of known peers.
     - `cargo run request remove-ip <peer alias>`
