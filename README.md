@@ -91,6 +91,8 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
     - `cargo run request add-ip <alias> <peer IP address>`
   - Remove an IP from your lsit of known peers.
     - `cargo run request remove-ip <peer alias>`
+    - If the specified peer alias is `DELETE-ALL` then all entries in the list will be removed.
+  - View the catalog.
   - View your list of known peers.
     - `cargo run request view-ips`
 
