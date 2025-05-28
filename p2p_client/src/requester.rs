@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 27th, 2025
+//! May 28th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -544,6 +544,10 @@ fn save_incoming_file(
                 if let Err(e) = file.sync_all() {
                     return Err(format!("Failed to ensure all data was written to file: {e}"));
                 }
+
+                // for big files where hashing takes forever, this helps the user understand
+                // what is going on when the program says 100% but is still working
+                println!("Verifying file hash...");
 
                 let hash_bytes = match file_rw::read_file_bytes(&save_path) {
                     Ok(b) => b,
