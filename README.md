@@ -18,7 +18,7 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 - Run `cargo run` to build and run the app
   - By running with no arguments the app will display the commands available to run.
   - Alternatively, refer to the quick start guide and available commands below.
-- You can generate and open a docs site for our app by running `cargo doc --open`.
+- You can generate and open a documentation site for our app by running `cargo doc --open`.
 
 <details>
 <summary>Quick Start</summary>
