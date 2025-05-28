@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 27th, 2025
+//! May 28th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -434,17 +434,16 @@ fn fulfill_file_request(
 
     println!("Sending {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
 
-    // write packets
-    loop {
-        // subtract 2 for the data_length bytes
-        for chunk in mmap.chunks(packet::PACKET_SIZE - 2) {
-            // encode the data and send the packet
-            let message = packet::encode_packet(chunk.to_vec());
-            if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) {
-                return Err(format!("{e}"));
-            }
+    // subtract 2 for the data_length bytes
+    for chunk in mmap.chunks(packet::PACKET_SIZE - 2) {
+        // encode the data and send the packet
+        let message = packet::encode_packet(chunk.to_vec());
+        if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) {
+            return Err(format!("{e}"));
         }
     }
+
+    Ok(())
 }
 
 
