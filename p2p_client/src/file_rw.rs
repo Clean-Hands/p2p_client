@@ -1,6 +1,6 @@
 //! file_rw.rs
 //! by Lazuli Kleinhans, Ruben Boero
-//! May 20th, 2025
+//! May 27th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
@@ -50,6 +50,7 @@ pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
 ///     }
 /// }
 /// ```
+#[allow(dead_code)]
 pub fn open_iterable_file(file_path: &PathBuf) -> Result<Bytes<File>, String> {
     let f = match File::open(file_path) {
         Ok(f) => f,

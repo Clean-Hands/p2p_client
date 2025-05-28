@@ -1,13 +1,13 @@
 //! packet.rs
 //! by Ruben Boero, Liam Keane, Lazuli Kleinhans
-//! May 21th, 2025
+//! May 27th, 2025
 //! CS347 Advanced Software Design
 
 use byteorder::{BigEndian, ByteOrder};
 use sha2::{Digest, Sha256};
 use std::mem;
 
-pub const PACKET_SIZE: usize = 1024;
+pub const PACKET_SIZE: usize = 1024 * 8; // 8KB
 
 
 
