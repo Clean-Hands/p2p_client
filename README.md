@@ -21,7 +21,6 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 
 <details>
 <summary>Quick Start</summary>
-<br>
 
 ### Sending Files
 1. Choose a file that you want to make available to download
@@ -38,7 +37,6 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 
 <details>
 <summary>Available Commands</summary>
-<br>
 
 ### `listen` subcommand
   - Listen for incoming file requests:
