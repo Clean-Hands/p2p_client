@@ -1,10 +1,9 @@
 //! file_rw.rs
 //! by Lazuli Kleinhans, Ruben Boero
-//! May 27th, 2025
+//! May 28th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
-use std::io::{Bytes, Read};
 use std::path::PathBuf;
 
 
@@ -26,37 +25,6 @@ pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
         Ok(d) => Ok(d),
         Err(e) => Err(format!("Unable to read in file: {e}"))
     }
-}
-
-
-
-/// Returns an iterable `Bytes<File>` object that can get a file's bytes one by one
-///
-/// Useful if you don't want to read in all bytes at once or be able to
-/// pause and continue reading bytes without losing your place in the file
-///
-/// # Example
-///
-/// ```rust
-/// let bytes = match open_iterable_file(&String::from("test.txt")) {
-///     Ok(b) => b,
-///     Err(e) => eprintln!("Failed to open file: {e}");
-/// };
-///
-/// for byte in bytes {
-///     match byte {
-///         Ok(b) => println!("{b}"),
-///         Err(e) => eprintln!("Unable to read next byte: {e}")
-///     }
-/// }
-/// ```
-#[allow(dead_code)]
-pub fn open_iterable_file(file_path: &PathBuf) -> Result<Bytes<File>, String> {
-    let f = match File::open(file_path) {
-        Ok(f) => f,
-        Err(e) => return Err(format!("Couldn't open file: {e}"))
-    };
-    Ok(f.bytes())
 }
 
 
@@ -150,33 +118,6 @@ mod tests {
         assert_eq!(actual_data, Ok(expected_data));
 
         // cleanup
-        fs::remove_file(test_file_name).expect("Failed to remove file");
-    }
-
-    #[test]
-    fn test_open_iterable_file_and_read_correct_bytes() {
-        let test_file_name = PathBuf::from("test_open_iterable_file.txt");
-        let expected_data = b"Ruben said Lazuli was here :)".to_vec();
-
-        if let Err(e) = write_file_bytes(&test_file_name, &expected_data) {
-            panic!("{e}")
-        }
-
-        let mut actual_data = vec![];
-        let bytes = match open_iterable_file(&test_file_name) {
-            Ok(b) => b,
-            Err(e) => panic!("{e}")
-        };
-
-        for byte in bytes {
-            match byte {
-                Ok(b) => actual_data.push(b),
-                Err(e) => panic!("Unable to read next byte: {e}")
-            }
-        }
-
-        assert_eq!(actual_data, expected_data);
-
         fs::remove_file(test_file_name).expect("Failed to remove file");
     }
 
