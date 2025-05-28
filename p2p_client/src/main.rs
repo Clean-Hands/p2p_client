@@ -5,11 +5,13 @@
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use eframe::egui;
 mod encryption;
 mod file_rw;
 mod listener;
 mod packet;
 mod requester;
+mod gui;
 
 #[derive(Parser)]
 #[command(name = "p2p_client")]
@@ -69,6 +71,17 @@ enum ListenCommand {
 }
 
 fn main() {
+    
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 500.0]),
+        ..Default::default()
+    };
+    
+    eframe::run_native(
+        "My egui App",
+        options,
+        Box::new(|_cc| Ok(Box::new(gui::MyApp::default())))
+    ).unwrap();
     let cli = Cli::parse();
     match cli.mode {
         // parse the request subcommand
