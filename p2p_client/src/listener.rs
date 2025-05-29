@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 28th, 2025
+//! May 29th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -442,6 +442,8 @@ fn fulfill_file_request(
             return Err(format!("{e}"));
         }
     }
+
+    println!("Successfully sent {:?} to {:?}", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
 
     Ok(())
 }
