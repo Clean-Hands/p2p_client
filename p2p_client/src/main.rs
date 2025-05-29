@@ -18,7 +18,7 @@ mod gui;
 #[command(about = "Send a file from one peer to another", long_about = None)]
 struct Cli {
     #[command(subcommand)]
-    mode: Mode
+    mode: Option<Mode>
 }
 
 #[derive(Subcommand)]
@@ -71,21 +71,10 @@ enum ListenCommand {
 }
 
 fn main() {
-    
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 500.0]),
-        ..Default::default()
-    };
-    
-    eframe::run_native(
-        "My egui App",
-        options,
-        Box::new(|_cc| Ok(Box::new(gui::MyApp::default())))
-    ).unwrap();
     let cli = Cli::parse();
     match cli.mode {
         // parse the request subcommand
-        Mode::Request { command } => match command {
+        Some(Mode::Request { command }) => match command {
             RequestCommand::File {
                 peer,
                 file_hash,
@@ -139,7 +128,7 @@ fn main() {
         },
 
         // parse the listen subcommand
-        Mode::Listen { command } => match command {
+        Some(Mode::Listen { command }) => match command {
             ListenCommand::Start {} => {
                 listener::start_listening();
             },
@@ -161,6 +150,20 @@ fn main() {
                     return;
                 }
             }
+        },
+
+        None => {
+            // User didn't pass a CLI option, therefore open the GUI
+            let options = eframe::NativeOptions {
+                viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 200.0]), // Set window size
+                ..Default::default() // Set all options other than `viewport` to their defaults
+            };
+            
+            eframe::run_native(
+                "P2P Client GUI",
+                options,
+                Box::new(|_cc| Ok(Box::new(gui::MyApp::default())))
+            ).unwrap();
         }
     }
 }
