@@ -13,8 +13,6 @@ pub const AES256GCM_VER_TAG_SIZE: usize = 16;
 
 
 
-// TODO, this seems janky and unintended within aes_gcm crate, look for better way to incr nonce
-/// Increment the nonce within the struct
 fn increment_nonce(nonce: &mut [u8; 12]) {
     let mut carry = true;
 
@@ -82,7 +80,6 @@ pub fn send_to_connection(
     message: [u8; packet::PACKET_SIZE],
 ) -> Result<(), String> {
     // encrypt message
-    // TODO: check that cipher is initialized correctly in start_sender_task
     let ciphertext = match encrypt_message(nonce, cipher, &message) {
         Ok(c) => c,
         Err(e) => return Err(format!("Encryption failed: {e}"))
