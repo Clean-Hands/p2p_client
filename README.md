@@ -3,7 +3,7 @@
 ## Description
 Our project is a [peer-to-peer](https://en.wikipedia.org/wiki/Peer-to-peer) file sharing client.
 
-A peer-to-peer file-sharing network is a decentralized network where each member of the network can send and receive files to any other member. An instance acting as a requester initiates a connection with a second instance acting as a listener. The listener will then send the requested file to the requester.
+A peer-to-peer file-sharing network is a [decentralized network](https://en.wikipedia.org/wiki/Decentralized_web) where each member of the network can send and receive files to any other member. An instance acting as a requester initiates a connection with a second instance acting as a listener. The listener will then send the requested file to the requester.
 
 Many peer-to-peer networks have a centralized server to provide a way to discover other peers to connect to. We do not have this functionality yet, but we may add it if we have time. 
 
