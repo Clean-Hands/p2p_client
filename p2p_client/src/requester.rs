@@ -95,7 +95,8 @@ fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<PeerMap, Strin
 
 
 
-/// Writes changes made to peer_list. If there is not file at the given path, will create a file an populate it with a bare json list: {}
+/// Writes changes made to peer_list. If there is not file at the given path, it will create a file and
+/// populate it with a bare json list: {}
 fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Result<(), String> {
     // write updated peer list to peers.json
     let mut json_file = match File::create(peer_list_path) {
@@ -254,8 +255,6 @@ pub fn ping_addr(peer: &String) -> Result<String, String> {
         Err(e) => return Err(e)
     };
     let send_addr = format!("{addr}:7878");
-
-    // println!("Attempting to ping {send_addr}...");
 
     match TcpStream::connect(&send_addr) {
         Ok(_) => return Ok(format!("{addr} is online!")),
@@ -472,7 +471,7 @@ fn await_file_metadata(
 
 
 
-/// prints a download progress bar to stdout
+/// Prints a download progress bar to stdout
 fn print_loading_bar(bytes_sent: u64, total_bytes: u64, bytes_per_sec: u64, tick: usize) {
     let percent: f64 = bytes_sent as f64 / total_bytes as f64;
     let filled = ((percent * BAR_WIDTH as f64).round() as usize).clamp(0, BAR_WIDTH);

@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 28th, 2025
+//! May 29th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -98,7 +98,8 @@ fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String
 
 
 
-/// Writes changes made to catalog. If there is not file at the given path, will create a file an populate it with a bare json list: {}
+/// Writes changes made to catalog. If there is not file at the given path, it will create a file and 
+/// populate it with a bare json list: {}
 fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result<(), String> {
     // write updated catalog to catalog.json
     let mut json_file = match File::create(catalog_path) {
@@ -315,7 +316,7 @@ fn fulfill_catalog_request(
         }
     }
     
-    let catalog_bytes = match serde_json::to_string_pretty(&pathless_catalog) {
+    let catalog_bytes = match serde_json::to_string(&pathless_catalog) {
         Ok(j) => j.into_bytes(),
         Err(e) => return Err(format!("Failed to serialize catalog: {e}"))
     };
@@ -443,6 +444,8 @@ fn fulfill_file_request(
         }
     }
 
+    println!("Successfully sent {:?} to {:?}", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
+
     Ok(())
 }
 
@@ -450,8 +453,6 @@ fn fulfill_file_request(
 
 /// An asynchronous task that handles sending a file over `stream`
 pub async fn start_sender_task(mut stream: TcpStream) {
-    // println!("Connecting to {:?}...", stream.peer_addr().unwrap());
-
     // carry out DH exchange
     let dh_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
     let dh_public_key = PublicKey::from(&dh_private_key);
@@ -479,8 +480,6 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     let key = Key::<Aes256Gcm>::from_slice(dh_shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
     let mut nonce = [0u8; 12];
-
-    // println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
 
     // listen for the mode packet sent
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
@@ -557,8 +556,6 @@ pub fn start_listening() {
                 continue;
             }
         };
-
-        // println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
 
         // spawn a new task for each incoming stream to handle more than one connection
         runtime.spawn(start_sender_task(stream));

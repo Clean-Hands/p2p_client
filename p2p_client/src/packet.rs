@@ -52,7 +52,7 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
     let file_data_len = data_len - mem::size_of::<u16>() as u16;
     packet.data = packet_bytes[offset..offset + file_data_len as usize].to_vec();
 
-    Ok(packet) // return the decoded packet
+    Ok(packet)
 }
 
 
