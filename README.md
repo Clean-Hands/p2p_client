@@ -79,7 +79,7 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 
 ## Existing Features
 - **As a listener:** 
-  - Start a listener that sends requested files to peers. The listener can handle multiple requests at once via ([rust's asynchronous feature](https://rust-lang.github.io/async-book/)).
+  - Start a listener that sends requested files to peers. The listener can handle multiple requests at once via [rust's asynchronous feature](https://rust-lang.github.io/async-book/).
     - `cargo run listen start`
   - Add a file to the listener's catalog of available files. The catalog contains information (hash, file size, and file name) about all files that are available to request. Note, only files present in the listener's catalog are able to be sent to a requester.
     - `cargo run listen add-file <file path>`
