@@ -31,14 +31,17 @@ Ensure you have navigated to the `p2p_client` directory before attempting to run
     - `cargo run listen view-catalog`
 ### `request` subcommand
   - Send a file request to a listening peer:
-    - `cargo run request file <peer IP address> <file hash> [OPTIONAL: save location]`
+    - `cargo run request file <peer IP address or alias> <file hash> [OPTIONAL: save location]`
+      - An `alias` is associated with an IP address by running the `add-ip` command
   - Request the catalog of a specific peer:
-    - `cargo run request catalog <peer IP address>`
+    - `cargo run request catalog <peer IP address or alias>`
+    - An `alias` is associated with an IP address by running the `add-ip` command
   - Check if a specific peer is up and listening for requests:
-    - `cargo run request ping <peer IP address>`
+    - `cargo run request ping <peer IP address or alias>`
+      - An `alias` is associated with an IP address by running the `add-ip` command
   - Add an IP to your list of known peers:
-    - `cargo run request add-ip <peer IP address> [OPTIONAL: alias]`
+    - `cargo run request add-ip <alias> <peer IP address>`
   - Remove an IP from your list of known peers:
-    - `cargo run request remove-ip <peer IP address>`
+    - `cargo run request remove-ip <peer alias>`
   - View your local list of known peers:
     - `cargo run request view-ips`

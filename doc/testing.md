@@ -1,4 +1,5 @@
 # testing
+# WARNING: This file is out of date, the commands to run are outdated. Refer to the running.md file for instructions on how to use the application.
 
 ## Automated Unit Testing
 We are using the [Rust unit test functionality](https://doc.rust-lang.org/book/ch11-00-testing.html) managed by cargo. 

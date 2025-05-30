@@ -1,13 +1,13 @@
 //! packet.rs
 //! by Ruben Boero, Liam Keane, Lazuli Kleinhans
-//! May 21th, 2025
+//! May 27th, 2025
 //! CS347 Advanced Software Design
 
 use byteorder::{BigEndian, ByteOrder};
 use sha2::{Digest, Sha256};
 use std::mem;
 
-pub const PACKET_SIZE: usize = 1024;
+pub const PACKET_SIZE: usize = 1024 * 16 ; // 16KB
 
 
 
@@ -52,7 +52,7 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
     let file_data_len = data_len - mem::size_of::<u16>() as u16;
     packet.data = packet_bytes[offset..offset + file_data_len as usize].to_vec();
 
-    Ok(packet) // return the decoded packet
+    Ok(packet)
 }
 
 

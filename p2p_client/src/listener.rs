@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 22nd, 2025
+//! May 29th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -21,6 +21,7 @@ use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use tokio::runtime::Runtime;
+use memmap2::Mmap;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type CatalogMap = HashMap<String, FileInfo>;
@@ -97,7 +98,8 @@ fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String
 
 
 
-/// Writes changes made to catalog. If there is not file at the given path, will create a file an populate it with a bare json list: {}
+/// Writes changes made to catalog. If there is not file at the given path, it will create a file and 
+/// populate it with a bare json list: {}
 fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result<(), String> {
     // write updated catalog to catalog.json
     let mut json_file = match File::create(catalog_path) {
@@ -314,7 +316,7 @@ fn fulfill_catalog_request(
         }
     }
     
-    let catalog_bytes = match serde_json::to_string_pretty(&pathless_catalog) {
+    let catalog_bytes = match serde_json::to_string(&pathless_catalog) {
         Ok(j) => j.into_bytes(),
         Err(e) => return Err(format!("Failed to serialize catalog: {e}"))
     };
@@ -421,48 +423,36 @@ fn fulfill_file_request(
         return Err(format!("Failed to send file name and hash to peer: {e}"));
     }
 
-    // read file
-    let mut file_bytes = match file_rw::open_iterable_file(&file_path) {
-        Ok(b) => b,
-        Err(e) => return Err(format!("Unable to open file: {e}"))
+    let file = match File::open(&file_path) {
+        Ok(f) => f,
+        Err(e) => return Err(format!("Couldn't open file: {e}"))
+    };
+
+    let mmap = match unsafe { Mmap::map(&file) } {
+        Ok(m) => m,
+        Err(e) => return Err(format!("Couldn't open memory map: {e}"))
     };
 
     println!("Sending {:?} to {:?}...", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
 
-    // write packets until EOF
-    loop {
-        let mut write_bytes: Vec<u8> = vec![];
-        // subtract 2 for the data_length bytes
-        let max_bytes = packet::PACKET_SIZE - 2;
-        for _ in 0..max_bytes {
-            match file_bytes.next() {
-                Some(Ok(b)) => write_bytes.push(b),
-                Some(Err(e)) => eprintln!("Unable to read next byte: {e}"),
-                None => {
-                    // when trying to read the next byte, we read EOF so send the last packet and return
-                    let message = packet::encode_packet(write_bytes);
-                    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) { 
-                        return Err(format!("Failed to send packet: {e}"));
-                    }
-                    println!("File {:?} successfully sent to {:?}", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
-                    return Ok(());
-                }
-            }
-        }
+    // subtract 2 for the data_length bytes
+    for chunk in mmap.chunks(packet::PACKET_SIZE - 2) {
         // encode the data and send the packet
-        let message = packet::encode_packet(write_bytes);
+        let message = packet::encode_packet(chunk.to_vec());
         if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, message) {
             return Err(format!("{e}"));
         }
     }
+
+    println!("Successfully sent {:?} to {:?}", file_path.file_name().unwrap(), stream.peer_addr().unwrap());
+
+    Ok(())
 }
 
 
 
 /// An asynchronous task that handles sending a file over `stream`
 pub async fn start_sender_task(mut stream: TcpStream) {
-    // println!("Connecting to {:?}...", stream.peer_addr().unwrap());
-
     // carry out DH exchange
     let dh_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
     let dh_public_key = PublicKey::from(&dh_private_key);
@@ -490,8 +480,6 @@ pub async fn start_sender_task(mut stream: TcpStream) {
     let key = Key::<Aes256Gcm>::from_slice(dh_shared_secret.as_bytes());
     let cipher = Aes256Gcm::new(key);
     let mut nonce = [0u8; 12];
-
-    // println!("Successfully connected to {:?}", stream.peer_addr().unwrap());
 
     // listen for the mode packet sent
     let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
@@ -568,8 +556,6 @@ pub fn start_listening() {
                 continue;
             }
         };
-
-        // println!("\nGot a request from {:?}", stream.peer_addr().unwrap());
 
         // spawn a new task for each incoming stream to handle more than one connection
         runtime.spawn(start_sender_task(stream));

@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 21st, 2025
+//! May 28th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -17,6 +17,7 @@ use size::Size;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read, Write};
+use std::net::IpAddr;
 use std::net::TcpStream;
 use std::path::{PathBuf};
 use std::thread::sleep;
@@ -94,7 +95,8 @@ fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<PeerMap, Strin
 
 
 
-/// Writes changes made to peer_list. If there is not file at the given path, will create a file an populate it with a bare json list: {}
+/// Writes changes made to peer_list. If there is not file at the given path, it will create a file and
+/// populate it with a bare json list: {}
 fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Result<(), String> {
     // write updated peer list to peers.json
     let mut json_file = match File::create(peer_list_path) {
@@ -119,7 +121,7 @@ fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Res
 
 /// Given an IP and alias for the IP as input, stores them in peers.json
 /// found in a static directory. See get_peer_list_path() for peers.json locations
-pub fn add_ip_to_peers(peer_addr: &String, alias: &String) -> Result<(), String> {
+pub fn add_ip_to_peers(alias: &String, peer_addr: &String) -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
         Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
@@ -131,7 +133,7 @@ pub fn add_ip_to_peers(peer_addr: &String, alias: &String) -> Result<(), String>
     };
 
     // add/update entry in peer_list
-    peer_list.insert(peer_addr.clone(), alias.clone());
+    peer_list.insert(alias.clone(), peer_addr.clone());
 
     if let Err(e) = write_updated_peer_list(&peer_list_path, &peer_list) {
         return Err(format!("Error writing updated catalog: {}", e));
@@ -144,10 +146,10 @@ pub fn add_ip_to_peers(peer_addr: &String, alias: &String) -> Result<(), String>
 
 
 
-/// Given an IP as input, removes the associated entry from the peer list
+/// Given an alias as input, removes the associated entry from the peer list
 ///
-/// If the input IP is `DELETE-ALL` then all entries in the catalog will be removed
-pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
+/// If the input alias is `DELETE-ALL` then all entries in the catalog will be removed
+pub fn remove_ip_from_peer_list(alias: &String) -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
         Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
@@ -158,14 +160,14 @@ pub fn remove_ip_from_peer_list(peer_addr: &String) -> Result<(), String> {
         Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
     };
 
-    if peer_addr == "DELETE-ALL" {
+    if alias == "DELETE-ALL" {
         peer_list.clear();
         println!("Successfully removed all entries from peer list");
     } else {
-        match peer_list.remove(peer_addr) {
-            None => println!("Entry \"{peer_addr}\" does not exist in catalog"),
+        match peer_list.remove(alias) {
+            None => println!("Entry \"{alias}\" does not exist in catalog"),
             Some(f) => {
-                let alias = String::from(f);
+                let peer_addr = String::from(f);
                 println!("Successfully removed {alias} ({peer_addr}) from catalog")
             }
         };
@@ -198,43 +200,43 @@ pub fn view_peer_list() -> Result<(), String> {
         return Ok(());
     }
 
-    let max_ip_len = peer_list
-        .keys()
-        .map(|ip| ip.len())
-        // make sure that we don't go under the length of the table header
-        .filter(|length| length > &"IP Address".len())
-        .max()
-        .unwrap_or("IP Address".len());
-
     let max_alias_len = peer_list
-        .values()
+        .keys()
         .map(|alias| alias.len())
         // make sure that we don't go under the length of the table header
         .filter(|length| length > &"Alias".len())
         .max()
         .unwrap_or("Alias".len());
 
+    let max_ip_len = peer_list
+        .values()
+        .map(|ip| ip.len())
+        // make sure that we don't go under the length of the table header
+        .filter(|length| length > &"IP Address".len())
+        .max()
+        .unwrap_or("IP Address".len());
+
     // print table header
     println!(
-        "| {:<max_ip_len$} | {:<width$}",
-        "IP Address",
+        "| {:<max_alias_len$} | {:<width$}",
         "Alias",
+        "IP Address",
         width = max_alias_len
     );
 
     // 2 gives space for the bar separating IP and alias
     println!(
         "|{}|{}",
-        "=".repeat(2 + max_ip_len),
-        "=".repeat(2 + max_alias_len)
+        "=".repeat(2 + max_alias_len),
+        "=".repeat(2 + max_ip_len)
     );
 
     // print each catalog entry
-    for (ip, alias) in peer_list.iter() {
+    for (alias, ip) in peer_list.iter() {
         println!(
-            "| {:<max_ip_len$} | {:<max_alias_len$}",
-            ip,
-            alias
+            "| {:<max_alias_len$} | {:<max_ip_len$}",
+            alias,
+            ip
         );
     }
 
@@ -245,10 +247,14 @@ pub fn view_peer_list() -> Result<(), String> {
 
 /// Ping an address to check that it is online. If TCP stream is established, stream is closed,
 /// and Ok is returned. If TCP stream is not established, Err is returned.
-pub fn ping_addr(addr: &String) -> Result<String, String> {
+/// 
+/// `peer` can be the IP of the sender or an alias associated with an IP in the peer list
+pub fn ping_addr(peer: &String) -> Result<String, String> {
+    let addr = match resolve_input(&peer) {
+        Ok(a) => a,
+        Err(e) => return Err(e)
+    };
     let send_addr = format!("{addr}:7878");
-
-    // println!("Attempting to ping {send_addr}...");
 
     match TcpStream::connect(&send_addr) {
         Ok(_) => return Ok(format!("{addr} is online!")),
@@ -296,7 +302,7 @@ fn connect_stream(addr: &String) -> TcpStream {
     let send_addr = format!("{addr}:7878");
     // loop until connection is successful
     loop {
-        // println!("Attempting to connect to {send_addr}...");
+        println!("Attempting to connect to {send_addr}...");
         match TcpStream::connect(&send_addr) {
             Ok(s) => {
                 // println!("Connected to {send_addr}");
@@ -312,8 +318,14 @@ fn connect_stream(addr: &String) -> TcpStream {
 
 
 
-/// Requests catalog from a given sender's IP address, then prints the contents of the catalog to stdout
-pub fn request_catalog(addr: &String) -> Result<(), String> {
+/// Requests catalog from an alias associated with a peer's IP in the peer list, or given a 
+/// peer's IP address directly, then prints the contents of the catalog to stdout
+pub fn request_catalog(peer: &String) -> Result<(), String> {
+    let addr = match resolve_input(&peer) {
+        Ok(a) => a,
+        Err(e) => return Err(e)
+    };
+
     let mut stream = connect_stream(&addr);
 
     let cipher = match perform_dh_handshake(&stream) {
@@ -325,7 +337,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
     let mut nonce: [u8; 12] = [0; 12];
     let req_catalog_packet = packet::encode_packet(String::from("request_catalog").into_bytes());
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet) {
-        return Err(format!("Failed to send request for sender catalog {e}"));
+        return Err(format!("Failed to send request for peer's catalog {e}"));
     }
 
     // listen for response
@@ -363,7 +375,7 @@ pub fn request_catalog(addr: &String) -> Result<(), String> {
     };
 
     if catalog.is_empty() {
-        println!("Sender's catalog is empty.");
+        println!("Peer's catalog is empty.");
         return Ok(());
     }
 
@@ -459,7 +471,7 @@ fn await_file_metadata(
 
 
 
-/// prints a download progress bar to stdout
+/// Prints a download progress bar to stdout
 fn print_loading_bar(bytes_sent: u64, total_bytes: u64, bytes_per_sec: u64, tick: usize) {
     let percent: f64 = bytes_sent as f64 / total_bytes as f64;
     let filled = ((percent * BAR_WIDTH as f64).round() as usize).clamp(0, BAR_WIDTH);
@@ -532,6 +544,10 @@ fn save_incoming_file(
                     return Err(format!("Failed to ensure all data was written to file: {e}"));
                 }
 
+                // for big files where hashing takes forever, this helps the user understand
+                // what is going on when the program says 100% but is still working
+                println!("Verifying file hash...");
+
                 let hash_bytes = match file_rw::read_file_bytes(&save_path) {
                     Ok(b) => b,
                     Err(e) => return Err(e)
@@ -584,9 +600,56 @@ fn save_incoming_file(
 }
 
 
+/// Returns the IP associated with the given alias (from the peer catalog)
+fn get_ip_from_peer_list(alias: &String) -> Result<String, String> {
+    // load existing catalog or create a new one
+    let peer_list_path = match get_peer_list_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
+    };
 
-/// Send a request for a file by its `hash` to the IP `addr`, saving it in `file_path`
-pub fn request_file(addr: String, hash: String, file_path: PathBuf) {
+    let catalog = match get_deserialized_peer_list(&peer_list_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
+    };
+
+    // get IP from peer list
+    let ip = match catalog.get(alias) {
+        Some(i) => i.to_owned(),
+        None => return Err(format!("Requested alias does not exist in catalog"))
+    };
+
+    Ok(ip)
+}
+
+
+/// Takes in a peer (either alias or IP address) and returns an IP address
+fn resolve_input(peer: &String) -> Result<String, String> {
+    if let Ok(ip) = peer.parse::<IpAddr>() {
+        return Ok(ip.to_string());
+    }
+
+    match get_ip_from_peer_list(&peer) {
+        Ok(a) => Ok(a),
+        Err(e) => return Err(format!("Failed to retrieve IP associated with {peer}: {e}"))
+    }
+}
+
+
+
+/// Send a request for a file by its `hash` to the `peer`, saving it in `file_path`.
+/// 
+/// `peer` can be an IP or an alias saved in the peer list associated with an IP.
+pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
+    // determine if user input an alias or an IP
+    let addr = match resolve_input(&peer) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("{e}");
+            return;
+        }
+    };
+
     let mut stream = connect_stream(&addr);
 
     let cipher = match perform_dh_handshake(&stream) {
