@@ -1,11 +1,11 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! May 19th, 2025
+//! May 30th, 2025
 //! CS347 Advanced Software Design
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use eframe::egui;
+use eframe::{self, egui};
 mod encryption;
 mod file_rw;
 mod listener;
@@ -153,16 +153,14 @@ fn main() {
         },
 
         None => {
-            // User didn't pass a CLI option, therefore open the GUI
-            let options = eframe::NativeOptions {
-                viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 200.0]), // Set window size
-                ..Default::default() // Set all options other than `viewport` to their defaults
-            };
-            
+            // User didn't pass a CLI option, therefore open the GUI            
             eframe::run_native(
                 "P2P Client GUI",
-                options,
-                Box::new(|_cc| Ok(Box::new(gui::MyApp::default())))
+                eframe::NativeOptions { 
+                    viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 300.0]), // Set window size
+                    ..Default::default() // Set all options other than `viewport` to their defaults
+                },
+                Box::new(|cc| Ok(Box::new(gui::P2PGui::new(cc))))
             ).unwrap();
         }
     }

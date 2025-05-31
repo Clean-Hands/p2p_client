@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 28th, 2025
+//! May 30th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -320,7 +320,7 @@ fn connect_stream(addr: &String) -> TcpStream {
 
 /// Requests catalog from an alias associated with a peer's IP in the peer list, or given a 
 /// peer's IP address directly, then prints the contents of the catalog to stdout
-pub fn request_catalog(peer: &String) -> Result<(), String> {
+pub fn request_catalog(peer: &String) -> Result<String, String> {
     let addr = match resolve_input(&peer) {
         Ok(a) => a,
         Err(e) => return Err(e)
@@ -375,8 +375,7 @@ pub fn request_catalog(peer: &String) -> Result<(), String> {
     };
 
     if catalog.is_empty() {
-        println!("Peer's catalog is empty.");
-        return Ok(());
+        return Ok(String::from("Peer's catalog is empty."));
     }
 
     // dynamically determine max len name
@@ -400,7 +399,7 @@ pub fn request_catalog(peer: &String) -> Result<(), String> {
     let hash_len = 64;
 
     // print table header
-    println!(
+    let mut catalog_string = format!(
         "| {:<hash_len$} | {:<max_name_len$} | {:<max_size_len$}",
         "SHA-256 Hash",
         "File Name",
@@ -408,24 +407,24 @@ pub fn request_catalog(peer: &String) -> Result<(), String> {
     );
 
     // 2 gives space for the bars separating columns
-    println!(
-        "|{}|{}|{}",
+    catalog_string.push_str(&format!(
+        "\n|{}|{}|{}",
         "=".repeat(2 + hash_len),
         "=".repeat(2 + max_name_len),
         "=".repeat(2 + max_size_len)
-    );
+    ));
 
     // print each catalog entry
     for (hash, info) in catalog.iter() {
         let file_size = Size::from_bytes(info.file_size).to_string();
 
-        println!(
-            "| {:<hash_len$} | {:<max_name_len$} | {:<max_size_len$}",
+        catalog_string.push_str(&format!(
+            "\n| {:<hash_len$} | {:<max_name_len$} | {:<max_size_len$}",
             hash, info.file_path, file_size
-        );
+        ));
     }
 
-    Ok(())
+    Ok(catalog_string)
 }
 
 
