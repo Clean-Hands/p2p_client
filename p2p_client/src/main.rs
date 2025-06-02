@@ -87,8 +87,13 @@ fn main() {
                 );
             },
             RequestCommand::Catalog { peer } => {
-                if let Err(e) = requester::request_catalog(&peer) {
-                    eprintln!("Error while requesting catalog: {e}")
+                match requester::request_catalog(&peer) {
+                    Ok(result) => {
+                        println!("{result}")
+                    },
+                    Err(e) => {
+                        eprintln!("Error while requesting catalog: {e}")
+                    }
                 }
             },
             RequestCommand::Ping { peer } => {
@@ -99,7 +104,7 @@ fn main() {
                     Err(e) => {
                         println!("{e}")
                     }
-                };
+                }
             },
             // TODO: do we want to change the name of the below command since we're using the alias
             // as the key rather than the IP, or do we still want to emphasize that the IP is what
