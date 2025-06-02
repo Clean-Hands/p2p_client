@@ -17,7 +17,7 @@ use size::Size;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read, Write};
-use std::net::IpAddr;
+use std::net::{IpAddr, ToSocketAddrs};
 use std::net::TcpStream;
 use std::path::{PathBuf};
 use std::thread::sleep;
@@ -256,9 +256,21 @@ pub fn ping_addr(peer: &String) -> Result<String, String> {
     };
     let send_addr = format!("{addr}:7878");
 
-    match TcpStream::connect(&send_addr) {
+    // We only ever ping 1 IP at a time, so treat the vector as a single item
+    let socket_addr = match send_addr.to_socket_addrs() {
+        Ok(mut addrs) => match addrs.next() {
+            Some(a) => a,
+            None => return Err(format!("Could not resolve address: {send_addr}")),
+        },
+        Err(e) => return Err(format!("Failed to resolve address {send_addr}: {e}")),
+    };
+
+    // If the peer does not respond in 1 second, we will return Err
+    let timeout = Duration::from_secs(1);
+
+    match TcpStream::connect_timeout(&socket_addr, timeout) {
         Ok(_) => return Ok(format!("{addr} is online!")),
-        Err(_) => return Err(format!("{addr} did not respond to ping"))
+        Err(_) => return Err(format!("{addr} did not respond to ping in time"))
     }
 }
 
@@ -678,5 +690,120 @@ pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
     // start receiving file packets, saving it in the directory file_path
     if let Err(e) = save_incoming_file(&cipher, &mut nonce, stream, file_path.clone(), &hash) {
         eprintln!("{e}");
+    }
+}
+
+#[serial_test::serial]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{listener};
+    use std::{fs, net::TcpListener};
+    use tokio::runtime::Runtime;
+    use serial_test::serial;
+    
+    fn create_temp_dir() -> std::io::Result<std::path::PathBuf> {
+        let temp_dir = std::env::temp_dir().join(format!("test_p2p_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir)?;
+        Ok(temp_dir)
+    }
+
+    fn cleanup_temp_dir(path: &std::path::Path) {
+        let _ = fs::remove_dir_all(path);
+    }
+
+    // TODO
+    // This test is not perfect because it uses insert() instead of add_ip_to_peers() and remove() 
+    // instead of remove_ip_from_peers(), but the latter uses the static directory location, and idk 
+    // how to create a temp version of that directory without clobbering the existing one
+    // CAN rename the old file and create a new one instead, then revert the name and delete the old one
+    #[test]
+    fn test_peer_list_workflow() {
+        let temp_dir = create_temp_dir().expect("Failed to create temp dir");
+        let peer_list_path = temp_dir.join("workflow_peers.json");
+        
+        // add items to a peer list
+        let map = PeerMap::new();
+        let write_result = write_updated_peer_list(&peer_list_path, &map);
+        assert!(write_result.is_ok());
+        assert!(peer_list_path.exists());
+        
+        let mut peer_list = get_deserialized_peer_list(&peer_list_path).unwrap();
+        peer_list.insert("alice".to_string(), "10.0.0.1".to_string());
+        peer_list.insert("bob".to_string(), "10.0.0.2".to_string());
+        write_updated_peer_list(&peer_list_path, &peer_list).unwrap();
+        
+        // read items from peer list
+        let read_result = get_deserialized_peer_list(&peer_list_path);
+        assert!(read_result.is_ok());
+        
+        let read_peer_list = read_result.unwrap();
+        assert_eq!(read_peer_list.len(), 2);
+        assert_eq!(read_peer_list.get("alice"), Some(&"10.0.0.1".to_string()));
+        assert_eq!(read_peer_list.get("bob"), Some(&"10.0.0.2".to_string()));
+        
+        // remove a peer
+        let mut final_list = read_peer_list;
+        final_list.remove("alice");
+        write_updated_peer_list(&peer_list_path, &final_list).unwrap();
+        
+        // check final state is correct
+        let final_read = get_deserialized_peer_list(&peer_list_path).unwrap();
+        assert_eq!(final_read.len(), 1);
+        assert!(!final_read.contains_key("alice"));
+        assert!(final_read.contains_key("bob"));
+        
+        cleanup_temp_dir(&temp_dir);
+    }
+
+    async fn listen_for_one_connection() {
+        let listen_addr = String::from("0.0.0.0:7878");
+        let listener = match TcpListener::bind(&listen_addr) {
+            Ok(l) => {
+                println!("Client listening on {}", &listen_addr);
+                l
+            },
+            Err(e) => {
+                eprintln!("Failed to bind: {}", e);
+                return;
+            }
+        };
+
+        // start handling incoming connections
+        let (stream, addr) = listener.accept().expect("Failed to accept connection");
+        println!("Client connected: {}", addr);
+        listener::start_sender_task(stream).await;
+    }
+
+    #[test]
+    #[serial]
+    fn test_ping_peer_online() {
+        // start listener
+        let runtime = Runtime::new().expect("Failed to create a runtime");
+        let _ = runtime.enter();
+        runtime.spawn(listen_for_one_connection());
+
+        let result = ping_addr(&"127.0.0.1".to_string());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ping_peer_offline() {
+        let result = ping_addr(&"127.0.0.1".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    // TODO: Lazuli changed request_catalog to return a String instead of printing to stdout in gui branch
+    // When they merge the gui branch into main, compare the returned String with an expected string
+    fn test_catalog_request() {
+        // start listener
+        let runtime = Runtime::new().expect("Failed to create a runtime");
+        let _ = runtime.enter();
+        runtime.spawn(listen_for_one_connection());
+
+        let result = request_catalog(&"127.0.0.1".to_string());
+        assert!(result.is_ok());
     }
 }
