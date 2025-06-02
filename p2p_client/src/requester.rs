@@ -701,59 +701,54 @@ mod tests {
     use std::{fs, net::TcpListener};
     use tokio::runtime::Runtime;
     use serial_test::serial;
-    
-    fn create_temp_dir() -> std::io::Result<std::path::PathBuf> {
-        let temp_dir = std::env::temp_dir().join(format!("test_p2p_{}", std::process::id()));
-        fs::create_dir_all(&temp_dir)?;
-        Ok(temp_dir)
-    }
 
-    fn cleanup_temp_dir(path: &std::path::Path) {
-        let _ = fs::remove_dir_all(path);
-    }
-
-    // TODO
-    // This test is not perfect because it uses insert() instead of add_ip_to_peers() and remove() 
-    // instead of remove_ip_from_peers(), but the latter uses the static directory location, and idk 
-    // how to create a temp version of that directory without clobbering the existing one
-    // CAN rename the old file and create a new one instead, then revert the name and delete the old one
     #[test]
     fn test_peer_list_workflow() {
-        let temp_dir = create_temp_dir().expect("Failed to create temp dir");
-        let peer_list_path = temp_dir.join("workflow_peers.json");
+        let list_path = get_peer_list_path().unwrap();
+
+        let backup_path = list_path.with_file_name("peers.json.backup");
+
+        let had_existing = if list_path.exists() {
+            fs::rename(&list_path, &backup_path).is_ok()
+            } else {
+                false
+        };
         
         // add items to a peer list
         let map = PeerMap::new();
-        let write_result = write_updated_peer_list(&peer_list_path, &map);
+        let write_result = write_updated_peer_list(&list_path, &map);
         assert!(write_result.is_ok());
-        assert!(peer_list_path.exists());
         
-        let mut peer_list = get_deserialized_peer_list(&peer_list_path).unwrap();
-        peer_list.insert("alice".to_string(), "10.0.0.1".to_string());
-        peer_list.insert("bob".to_string(), "10.0.0.2".to_string());
-        write_updated_peer_list(&peer_list_path, &peer_list).unwrap();
+        assert!(get_deserialized_peer_list(&list_path).is_ok());
+        assert!(add_ip_to_peers(&String::from("alice"), &String::from("10.0.0.1")).is_ok());
+        assert!(add_ip_to_peers(&String::from("bob"), &String::from("10.0.0.2")).is_ok());
         
-        // read items from peer list
-        let read_result = get_deserialized_peer_list(&peer_list_path);
+        // verify add was completed correctly
+        let read_result = get_deserialized_peer_list(&list_path);
         assert!(read_result.is_ok());
         
-        let read_peer_list = read_result.unwrap();
-        assert_eq!(read_peer_list.len(), 2);
-        assert_eq!(read_peer_list.get("alice"), Some(&"10.0.0.1".to_string()));
-        assert_eq!(read_peer_list.get("bob"), Some(&"10.0.0.2".to_string()));
+        let read_result = read_result.unwrap();
+        assert_eq!(read_result.len(), 2);
+        assert_eq!(read_result.get("alice"), Some(&"10.0.0.1".to_string()));
+        assert_eq!(read_result.get("bob"), Some(&"10.0.0.2".to_string()));
         
         // remove a peer
-        let mut final_list = read_peer_list;
-        final_list.remove("alice");
-        write_updated_peer_list(&peer_list_path, &final_list).unwrap();
+        assert!(remove_ip_from_peer_list(&String::from("alice")).is_ok());
         
         // check final state is correct
-        let final_read = get_deserialized_peer_list(&peer_list_path).unwrap();
+        let final_read = get_deserialized_peer_list(&list_path).unwrap();
         assert_eq!(final_read.len(), 1);
         assert!(!final_read.contains_key("alice"));
         assert!(final_read.contains_key("bob"));
         
-        cleanup_temp_dir(&temp_dir);
+        // cleanup
+        if let Err(e) = fs::remove_file(&list_path) {
+            eprintln!("Failed to remove testing file: {e}");
+        }
+
+        if had_existing {
+            let _ = fs::rename(&backup_path, &list_path);
+        }
     }
 
     async fn listen_for_one_connection() {
@@ -777,7 +772,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_ping_peer_online() {
+    fn test_pinging_online_peer() {
         // start listener
         let runtime = Runtime::new().expect("Failed to create a runtime");
         let _ = runtime.enter();
@@ -788,7 +783,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ping_peer_offline() {
+    fn test_pinging_offline_peer() {
         let result = ping_addr(&"127.0.0.1".to_string());
         assert!(result.is_err());
     }
