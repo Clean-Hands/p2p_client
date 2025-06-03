@@ -185,7 +185,6 @@ mod tests {
         let listen_addr = String::from("0.0.0.0:7878");
         let listener = match TcpListener::bind(&listen_addr) {
             Ok(l) => {
-                println!("Client listening on {}", &listen_addr);
                 l
             },
             Err(e) => {
@@ -193,11 +192,9 @@ mod tests {
                 return;
             }
         };
-        println!("Successfully started listener");
 
         // start handling incoming connections
-        let (stream, addr) = listener.accept().expect("Failed to accept connection");
-        println!("Client connected: {}", addr);
+        let (stream, _) = listener.accept().expect("Failed to accept connection");
         listener::start_sender_task(stream).await;
 
     }
