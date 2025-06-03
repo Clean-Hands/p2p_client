@@ -27,6 +27,7 @@ impl P2PGui {
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
+        
         Self::default()
     }
 
@@ -34,7 +35,7 @@ impl P2PGui {
         Self {
             error_string: String::new(),
             peer: String::new(),
-            save_path: String::from("."),
+            save_path: String::from(std::env::current_dir().unwrap_or(PathBuf::from(".")).to_str().unwrap_or(".")),
             options: vec![],
             hashes: vec![],
             modify_peers: false
@@ -52,7 +53,7 @@ impl eframe::App for P2PGui {
 
             ui.horizontal(|ui| {
                 ui.label("Save path:");
-                ui.add_sized([200.0, 20.0], |ui: &mut egui::Ui| {
+                ui.add_sized([300.0, 20.0], |ui: &mut egui::Ui| {
                     ui.text_edit_singleline(&mut self.save_path)
                 });
             });
@@ -147,22 +148,22 @@ impl eframe::App for P2PGui {
             }
             
             // Confirmation dialog
-            // if self.modify_peers {
-            //     egui::Window::new("Confirmation")
-            //         .collapsible(false)
-            //         .resizable(false)
-            //         .show(ctx, |ui| {
-            //             ui.label("This is a dialog window!");
-            //             ui.horizontal(|ui| {
-            //                 if ui.button("OK").clicked() {
-            //                     self.modify_peers = false;
-            //                 }
-            //                 if ui.button("Cancel").clicked() {
-            //                     self.modify_peers = false;
-            //                 }
-            //             });
-            //         });
-            // }
+            if self.modify_peers {
+                egui::Window::new("Known Peers")
+                    .collapsible(false)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        ui.label("This is a dialog window!");
+                        ui.horizontal(|ui| {
+                            if ui.button("OK").clicked() {
+                                self.modify_peers = false;
+                            }
+                            if ui.button("Cancel").clicked() {
+                                self.modify_peers = false;
+                            }
+                        });
+                    });
+            }
         });
     }
 }
