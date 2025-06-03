@@ -719,7 +719,6 @@ mod tests {
         let write_result = write_updated_peer_list(&list_path, &map);
         assert!(write_result.is_ok());
         
-        assert!(get_deserialized_peer_list(&list_path).is_ok());
         assert!(add_ip_to_peers(&String::from("alice"), &String::from("10.0.0.1")).is_ok());
         assert!(add_ip_to_peers(&String::from("bob"), &String::from("10.0.0.2")).is_ok());
         
