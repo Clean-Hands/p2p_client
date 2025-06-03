@@ -12,6 +12,7 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
+use std::env;
 use serde::{Serialize, Deserialize};
 use size::Size;
 use std::collections::HashMap;
@@ -635,11 +636,42 @@ fn resolve_input(peer: &String) -> Result<String, String> {
 }
 
 
+/// If the path contains a tilde, this function replaces it with the HOME path. If the path
+/// does not contain a tilde, returns the given path with no changes.
+fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
+    match path.to_str() {
+        Some(p) => {
+            if let Some(stripped) = p.strip_prefix("~/") {
+                match env::var("HOME") {
+                    Ok(home) => Ok(PathBuf::from(home).join(stripped)),
+                    Err(e) => Err(format!("Failed to retrieve HOME environment variable: {e}")),
+                }
+            } else if p == "~" {
+                match env::var("HOME") {
+                    Ok(home) => Ok(PathBuf::from(home)),
+                    Err(e) => Err(format!("Failed to retrieve HOME environment variable: {e}")),
+                }
+            } else {
+                Ok(path)
+            }
+        },
+        None => Err("Failed to convert path to string".to_string()),
+    }
+}
 
 /// Send a request for a file by its `hash` to the `peer`, saving it in `file_path`.
 /// 
 /// `peer` can be an IP or an alias saved in the peer list associated with an IP.
 pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
+    // replace a ~ with the HOME path if necessary
+    let file_path = match resolve_tilde(file_path) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Failed to remove ~ from file path: {e}");
+            return;
+        }
+    };
+
     // determine if user input an alias or an IP
     let addr = match resolve_input(&peer) {
         Ok(a) => a,
