@@ -3,7 +3,7 @@
 ## Description
 Our project is a [peer-to-peer](https://en.wikipedia.org/wiki/Peer-to-peer) file sharing client.
 
-A peer-to-peer file-sharing network is a decentralized network where each member of the network has the capability to send and receive files (each member can be both a client or server). One instance acting as a requester initiates a connection with a second instance acting as a listener. The listener will then send the requested file to the requester. 
+A peer-to-peer file-sharing network is a [decentralized network](https://en.wikipedia.org/wiki/Decentralized_web) where each member of the network can send and receive files to any other member. An instance acting as a requester initiates a connection with a second instance acting as a listener. The listener will then send the requested file to the requester.
 
 Many peer-to-peer networks have a centralized server to provide a way to discover other peers to connect to. We do not have this functionality yet, but we may add it if we have time. 
 
@@ -12,19 +12,20 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 ### Install dependencies
 - Install rust and other necessary tools by following [this guide](https://doc.rust-lang.org/book/ch01-01-installation.html) to install rustup.
 - Clone [our repository](https://github.com/rubenboero21/cs347)
+  - `git clone https://github.com/rubenboero21/cs347.git`
 
 ### Run the code
 - Navigate to the `p2p_client` directory
 - Run `cargo run` to build and run the app
   - By running with no arguments, the app will display the available commands.
   - Alternatively, refer to the quick start guide and available commands below.
-- You can generate and open a documentation site for our app by running `cargo doc --open`.
+- You can generate and open local documentation for our app by running `cargo doc --open`.
 
 <details>
 <summary>Quick Start</summary>
 
 ### Sending Files
-1. Choose a file that you want to make available to download
+1. Choose a file that you want to make available for download
 2. Add the file to your catalog with `cargo run listen add-file <file path>`
 3. Start listening for incoming requests with `cargo run listen start`
 
@@ -35,12 +36,12 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 4. Choose one of the files they have available, and copy its hash
 5. Request the file (and optionally choose where to save it) with `cargo run request file <IP address> <file hash> [save path]`
 
-Note, this app can be run on a single computer (for testing purposes). To do so:
+### Testing File Transfers Locally
 - Open 2 terminal windows
-- Use the 1st window as the sender. Follow the above instructions for sending files in this window
-- Use the 2nd window as the requester. Follow the above instructions for downloading files in this window.   
+- Use the first window as the sender. Follow the above instructions for sending files in this window
+- Use the second window as the requester. Follow the above instructions for downloading files in this window.   
   - You can use `127.0.0.1` (localhost) as the IP address to request from, or you can specify the IP address of your machine on your network
-  - **WARNING**: If you do not specify a save path different from the location of the file that is being sent when requesting a file, it is possible for the sender and requester to be reading and writing to the same file, destroying the contents of the file.
+  - **WARNING**: If you try to save the file in the same directory as you are uploading it from, the sender and requester will be reading and writing to the same file, which will likely corrupt the file's contents.
 </details>
 
 <details>
@@ -77,34 +78,34 @@ Note, this app can be run on a single computer (for testing purposes). To do so:
 
 
 ## Existing Features
-- As a listener: 
-  - Start a listener that sends requested files to peers. The listener can handle multiple requests at once ([via rust's asynchronous feature](https://rust-lang.github.io/async-book/)).
+- **As a listener:** 
+  - Start a listener that sends requested files to peers. The listener can handle multiple requests at once via [rust's asynchronous feature](https://rust-lang.github.io/async-book/).
     - `cargo run listen start`
-  - Add files to a catalog. The catalog contains information (hash, file size, and file location) about all files that are available to request. Note, only files present in the listener's catalog are able to be sent to a requester.
+  - Add a file to the listener's catalog of available files. The catalog contains information (hash, file size, and file name) about all files that are available to request. Note, only files present in the listener's catalog are able to be sent to a requester.
     - `cargo run listen add-file <file path>`
   - Remove a file from the catalog.
     - `cargo run listen remove-file <file hash>`
-    - If the specified file hash is `DELETE-ALL` then all entries in the catalog will be removed.
+    - If the specified file hash is `DELETE-ALL`, then all entries in the catalog will be removed.
   - View the catalog.
     - `cargo run listen view-catalog`
-- As a requester:
+- **As a requester:**
   - Check if a specific peer is listening for requests.
     - `cargo run request ping <peer IP address or alias>`
-  - Request the catalog of a specific peer. This allows the requester to find the hash of the files they want to request. See the Quick Start section above for a typical flow of commands to run in order to request a file.
+  - Request the catalog of a specific peer. This allows the requester to get the hash of a file they want to request. See the Quick Start section above for a typical flow of commands to run in order to request a file.
     - `cargo run request catalog <peer IP address or alias>`
   - Send a file request to a listening peer.
     - `cargo run request file <peer IP address or alias> <file hash> [OPTIONAL: save location]`
     - An `alias` is associated with an IP address by running the `add-ip` command. See the add-ip bullet below for more details.
-    - The default save location is the directory from which the code is run.
+    - The default save location is the current working directory (the folder in which you run the `cargo run ...` command).
   - Add an IP to your list of known peers.
-    - The purpose of this command is to allow the user to associate IPs with a more human readable alias. Once added to the list of peers, the alias can be used in place of an IP. For example, you could add 'localhost' as an alias for '127.0.0.1' by running: `cargo run request add-ip localhost 127.0.0.1` This would allow you to type localhost in place of the IP address in all places where an IP address is required.
+    - The purpose of this command is to allow the user to associate IPs with a human-readable alias. Once added to the list of peers, the alias can be used in place of an IP. For example, you could add 'localhost' as an alias for '127.0.0.1' by running: `cargo run request add-ip localhost 127.0.0.1`. This would allow you to type `localhost` in place of the IP address wherever an IP address is required.
     - `cargo run request add-ip <alias> <peer IP address>`
-  - Remove an IP from your lsit of known peers.
+  - Remove an IP from your list of known peers.
     - `cargo run request remove-ip <peer alias>`
-    - If the specified peer alias is `DELETE-ALL` then all entries in the list will be removed.
+    - If the specified peer alias is `DELETE-ALL`, then all entries in the list will be removed.
   - View your list of known peers.
     - `cargo run request view-ips`
 
 
 ## TODO
-We acknowledge that the current state of the program is cumbersome to use, requiring many commands to be run to request a single file as well as the use of many copies and pastes. To address this, we are working on creating a graphical user interface with the same features as the above command line interface. 
+We acknowledge that the current state of the program is cumbersome to use, requiring many commands to be run to request a single file, as well as copying and pasting long strings of text. To address this, we are working on a graphical user interface with the same features as our command line interface. 

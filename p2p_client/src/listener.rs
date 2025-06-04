@@ -589,3 +589,239 @@ pub fn start_listening() {
         runtime.spawn(start_sender_task(stream));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::io::BufWriter;
+    use tempfile::NamedTempFile;
+
+    /// Create a temp file for testing
+    fn create_large_file(size_in_mb: usize) -> NamedTempFile {
+        let file = NamedTempFile::new().unwrap();
+        {
+            let mut writer = BufWriter::new(&file);
+            let buffer = vec![b'x'; 1024]; // 1 KB
+
+            for _ in 0..(size_in_mb * 1024) {
+                writer.write_all(&buffer).unwrap();
+            }
+            writer.flush().unwrap();
+        }
+        return file
+    }
+
+    // test to test workflow of catalog (add, remove, create)
+    #[test]
+    #[serial]
+    fn test_catalog_workflow() {
+        // create dummy catalog for testing using same name as real catalog
+        // so need to rename existing catalog to be able to restore it later
+        let catalog_path = get_catalog_path().unwrap();
+
+        let backup_path = catalog_path.with_file_name("catalog.json.backup");
+
+        let had_existing = if catalog_path.exists() {
+            fs::rename(&catalog_path, &backup_path).is_ok()
+            } else {
+                false
+        };
+
+        // add files to catalog
+        let catalog = CatalogMap::new();
+        let write_result = write_updated_catalog(&catalog_path, &catalog);
+        assert!(write_result.is_ok());
+
+        let temp_file = create_large_file(1);
+        let file_path = temp_file.path().to_str().expect("Temp file path is not valid UTF-8").to_string();
+        let file_path_clone = file_path.clone();
+        assert!(add_file_to_catalog(&file_path).is_ok());
+
+        // verify add was completed correctly
+        let read_result = get_deserialized_catalog(&catalog_path);
+        assert!(read_result.is_ok());
+
+        let read_result = read_result.unwrap();
+        assert_eq!(read_result.len(), 1);
+
+        let mut file = fs::File::open(file_path).expect("Failed to open temp file");
+        let mut data = Vec::new();
+        file.read_to_end(&mut data).expect("Failed to read temp file");
+        let hash_bytes = packet::compute_sha256_hash(&data);
+        let hash_hex = hex::encode(hash_bytes);
+
+        let stored_path = &read_result.get(&hash_hex).unwrap().file_path;
+        let canonical_stored = fs::canonicalize(stored_path).unwrap();
+        let canonical_file_path = fs::canonicalize(&file_path_clone).unwrap();
+
+        assert_eq!(canonical_stored, canonical_file_path);
+
+        // remove file from catalog
+        assert!(remove_file_from_catalog(&hash_hex).is_ok());
+
+        // check final state is correct
+        let final_read = get_deserialized_catalog(&catalog_path).unwrap();
+        assert_eq!(final_read.len(), 0);
+
+        // cleanup
+        if let Err(e) = fs::remove_file(&canonical_file_path) {
+            eprintln!("Failed to remove testing file: {e}");
+        }
+
+        if had_existing {
+            let _ = fs::rename(&backup_path, &catalog_path);
+        }
+    }
+
+    // test catalog sending
+    #[test]
+    #[serial]
+    fn test_fulfilling_catalog_request() {
+        use std::thread;
+        use std::time::Duration;
+
+        let catalog_path = get_catalog_path().unwrap();
+        let backup_path = catalog_path.with_file_name("catalog.json.backup");
+
+        let had_existing = if catalog_path.exists() {
+            fs::rename(&catalog_path, &backup_path).is_ok()
+        } else {
+            false
+        };
+
+        // create test catalog with dummy data
+        let mut test_catalog = CatalogMap::new();
+        test_catalog.insert(
+            "abc123".to_string(),
+            FileInfo::new("/path/to/test_file.txt".to_string(), 1024)
+        );
+        test_catalog.insert(
+            "def456".to_string(),
+            FileInfo::new("/another/path/document.pdf".to_string(), 2048)
+        );
+        
+        let write_result = write_updated_catalog(&catalog_path, &test_catalog);
+        assert!(write_result.is_ok());
+
+        // create TCP connection for testing
+        // port 0 will auto-allocate an available port
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // spawn a thread to act as requester
+        let requester_thread = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            
+            // generate dummy test cipher and nonce
+            let test_key = [0u8; 32];
+            let key = Key::<Aes256Gcm>::from_slice(&test_key);
+            let cipher = Aes256Gcm::new(key);
+            let mut nonce = [0u8; 12];
+
+            fulfill_catalog_request(&mut stream, &mut nonce, &cipher)
+        });
+
+        // allow requester thread time to start
+        thread::sleep(Duration::from_millis(10));
+
+        // connect as listener
+        let mut listener_stream = TcpStream::connect(addr).unwrap();
+
+        // generate matching dummy cipher for decryption
+        let test_key = [0u8; 32];
+        let key = Key::<Aes256Gcm>::from_slice(&test_key);
+        let cipher = Aes256Gcm::new(key);
+        let mut nonce = [0u8; 12];
+
+        // wait for requester to send catalog request
+        let server_result = requester_thread.join().unwrap();
+        assert!(server_result.is_ok());
+
+        // read the response from the requester
+        let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
+        let read_result = listener_stream.read_exact(&mut buffer);
+        assert!(read_result.is_ok());
+
+        // decrypt the message
+        let decrypted = encryption::decrypt_message(&mut nonce, &cipher, &buffer);
+        assert!(decrypted.is_ok());
+
+        // decode the packet
+        let decoded_packet = packet::decode_packet(decrypted.unwrap());
+        assert!(decoded_packet.is_ok());
+
+        // deserialize packet into a catalog
+        let catalog_json = String::from_utf8(decoded_packet.unwrap().data).unwrap();
+        let received_catalog: CatalogMap = serde_json::from_str(&catalog_json).unwrap();
+
+        // verify the catalog contents
+        assert_eq!(received_catalog.len(), 2);
+        
+        let file_info_1 = received_catalog.get("abc123").unwrap();
+        let file_info_2 = received_catalog.get("def456").unwrap();
+        
+        assert_eq!(file_info_1.file_path, "test_file.txt");
+        assert_eq!(file_info_1.file_size, 1024);
+        
+        assert_eq!(file_info_2.file_path, "document.pdf");
+        assert_eq!(file_info_2.file_size, 2048);
+
+        // cleanup
+        if let Err(e) = fs::remove_file(&catalog_path) {
+            eprintln!("Failed to remove testing file: {e}");
+        }
+
+        if had_existing {
+            let _ = fs::rename(&backup_path, &catalog_path);
+        }
+    }
+
+    // getting file from catg
+    #[test]
+    #[serial]
+    fn test_get_file_from_catalog() {
+        let catalog_path = get_catalog_path().unwrap();
+
+        let backup_path = catalog_path.with_file_name("catalog.json.backup");
+
+        let had_existing = if catalog_path.exists() {
+            fs::rename(&catalog_path, &backup_path).is_ok()
+            } else {
+                false
+        };
+
+        // add files to catalog
+        let catalog = CatalogMap::new();
+        let write_result = write_updated_catalog(&catalog_path, &catalog);
+        assert!(write_result.is_ok());
+
+        let temp_file = create_large_file(1);
+        let file_path = temp_file.path().to_str().expect("File path is not valid UTF-8").to_string();
+        let file_path_clone = file_path.clone();
+        assert!(add_file_to_catalog(&file_path).is_ok());
+
+        // get hash of temp file
+        let mut file = fs::File::open(file_path).expect("Failed to open temp file");
+        let mut data = Vec::new();
+        file.read_to_end(&mut data).expect("Failed to read temp file");
+        let hash_bytes = packet::compute_sha256_hash(&data);
+        let hash_hex = hex::encode(hash_bytes);
+
+        if let Err(e) = get_file_from_catalog(&hash_hex) {
+            eprintln!("{e}")
+        };
+        let output_path = get_file_from_catalog(&hash_hex).unwrap();
+        let canonical_file_path = fs::canonicalize(&file_path_clone).unwrap();
+        assert_eq!(output_path, canonical_file_path);
+
+        // cleanup
+        if let Err(e) = fs::remove_file(&canonical_file_path) {
+            eprintln!("Failed to remove testing file: {e}");
+        }
+
+        if had_existing {
+            let _ = fs::rename(&backup_path, &catalog_path);
+        }
+    }
+}
