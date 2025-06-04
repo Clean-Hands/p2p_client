@@ -790,6 +790,8 @@ pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
 
 
 
+/// These tests assume that a listener is not running on the machine that is running the tests. 
+/// Tests will fail if your local machine is both running a listener and running tests.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,8 +883,8 @@ mod tests {
 
     #[test]
     #[serial]
-    // TODO: Lazuli changed request_catalog to return a String instead of printing to stdout in gui branch
-    // When they merge the gui branch into main, compare the returned String with an expected string
+    // TODO: request_catalog now returns a String instead of printing to stdout.
+    // Compare the returned String with an expected string instead of just checking if Result is Ok
     fn test_catalog_request() {
         // start listener
         let runtime = Runtime::new().expect("Failed to create a runtime");
