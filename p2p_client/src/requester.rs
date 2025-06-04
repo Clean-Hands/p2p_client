@@ -805,14 +805,14 @@ mod tests {
         
         // add items to a peer list
         let map = PeerMap::new();
-        let write_result = write_updated_peer_list(&list_path, &map);
+        let write_result = write_updated_peer_list(&map);
         assert!(write_result.is_ok());
         
-        assert!(add_ip_to_peers(&String::from("alice"), &String::from("10.0.0.1")).is_ok());
-        assert!(add_ip_to_peers(&String::from("bob"), &String::from("10.0.0.2")).is_ok());
+        assert!(add_peer(&String::from("alice"), &String::from("10.0.0.1")).is_ok());
+        assert!(add_peer(&String::from("bob"), &String::from("10.0.0.2")).is_ok());
         
         // verify add was completed correctly
-        let read_result = get_deserialized_peer_list(&list_path);
+        let read_result = get_deserialized_peer_list();
         assert!(read_result.is_ok());
         
         let read_result = read_result.unwrap();
@@ -821,10 +821,10 @@ mod tests {
         assert_eq!(read_result.get("bob"), Some(&"10.0.0.2".to_string()));
         
         // remove a peer
-        assert!(remove_ip_from_peer_list(&String::from("alice")).is_ok());
+        assert!(remove_from_peer_list(&String::from("alice")).is_ok());
         
         // check final state is correct
-        let final_read = get_deserialized_peer_list(&list_path).unwrap();
+        let final_read = get_deserialized_peer_list().unwrap();
         assert_eq!(final_read.len(), 1);
         assert!(!final_read.contains_key("alice"));
         assert!(final_read.contains_key("bob"));
@@ -864,13 +864,13 @@ mod tests {
         let _ = runtime.enter();
         runtime.spawn(listen_for_one_connection());
 
-        let result = ping_addr(&"127.0.0.1".to_string());
+        let result = ping_peer(&"127.0.0.1".to_string());
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_pinging_offline_peer() {
-        let result = ping_addr(&"127.0.0.1".to_string());
+        let result = ping_peer(&"127.0.0.1".to_string());
         assert!(result.is_err());
     }
 
