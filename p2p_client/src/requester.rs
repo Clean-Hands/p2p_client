@@ -15,14 +15,16 @@ use hex;
 use std::env;
 use serde::{Serialize, Deserialize};
 use size::Size;
-use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{self, ErrorKind, Read, Write};
-use std::net::{IpAddr, ToSocketAddrs};
-use std::net::TcpStream;
-use std::path::{PathBuf};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::{self, ErrorKind, Read, Write},
+    net::TcpStream,
+    net::{IpAddr, ToSocketAddrs},
+    path::PathBuf,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type PeerMap = HashMap<String, String>;
@@ -31,9 +33,8 @@ type CatalogMap = HashMap<String, FileInfo>;
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
 struct FileInfo {
     file_path: String,
-    file_size: u64
+    file_size: u64,
 }
-
 
 const SPINNER: &[char] = &['|', '/', '-', '\\'];
 const BAR_WIDTH: usize = 50;
@@ -55,7 +56,7 @@ fn get_peer_list_path() -> Result<PathBuf, String> {
     // find existing catalog or create a new one
     let mut peer_list_path = match ProjectDirs::from("com", "LLR", "p2p_client") {
         Some(d) => d.data_dir().to_owned().to_path_buf(),
-        None => return Err(format!("No valid config directory could be located"))
+        None => return Err(format!("No valid config directory could be located")),
     };
 
     if let Err(e) = fs::create_dir_all(&peer_list_path) {
@@ -81,12 +82,12 @@ pub fn get_deserialized_peer_list() -> Result<PeerMap, String> {
     if peer_list_path.exists() {
         let serialized = match fs::read_to_string(&peer_list_path) {
             Ok(c) => c,
-            Err(e) => return Err(e.to_string())
+            Err(e) => return Err(e.to_string()),
         };
 
         let deserialized = match serde_json::from_str(&serialized) {
             Ok(d) => d,
-            Err(e) => return Err(e.to_string())
+            Err(e) => return Err(e.to_string()),
         };
 
         peer_list = deserialized;
@@ -113,12 +114,12 @@ fn write_updated_peer_list(peer_list: &PeerMap) -> Result<(), String> {
     // write updated peer list to peers.json
     let mut json_file = match File::create(peer_list_path) {
         Ok(f) => f,
-        Err(e) => return Err(format!("Failed to open peer list file: {e}"))
+        Err(e) => return Err(format!("Failed to open peer list file: {e}")),
     };
 
     let json = match serde_json::to_string_pretty(peer_list) {
         Ok(j) => j,
-        Err(e) => return Err(format!("Failed to serialize peer list: {e}"))
+        Err(e) => return Err(format!("Failed to serialize peer list: {e}")),
     };
 
     let write_result = json_file.write_all(json.as_bytes());
@@ -147,7 +148,7 @@ fn write_updated_peer_list(peer_list: &PeerMap) -> Result<(), String> {
 pub fn add_peer(alias: &String, peer_addr: &String) -> Result<(), String> {
     let mut peer_list = match get_deserialized_peer_list() {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}")),
     };
 
     // add/update entry in peer_list
@@ -180,7 +181,7 @@ pub fn add_peer(alias: &String, peer_addr: &String) -> Result<(), String> {
 pub fn remove_from_peer_list(alias: &String) -> Result<(), String> {
     let mut peer_list = match get_deserialized_peer_list() {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}")),
     };
 
     if alias == "DELETE-ALL" {
@@ -198,7 +199,7 @@ pub fn remove_from_peer_list(alias: &String) -> Result<(), String> {
 
     // write updated catalog to catalog.json
     if let Err(e) = write_updated_peer_list(&peer_list) {
-        return Err(format!("Error writing updated catalog: {}", e))
+        return Err(format!("Error writing updated catalog: {e}"))
     }
 
     Ok(())
@@ -219,7 +220,7 @@ pub fn remove_from_peer_list(alias: &String) -> Result<(), String> {
 pub fn print_peer_list() -> Result<(), String> {
     let peer_list = match get_deserialized_peer_list() {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retrieve peer list: {e}"))
+        Err(e) => return Err(format!("Failed to retrieve peer list: {e}")),
     };
 
     if peer_list.is_empty() {
@@ -260,11 +261,7 @@ pub fn print_peer_list() -> Result<(), String> {
 
     // print each catalog entry
     for (alias, ip) in peer_list.iter() {
-        println!(
-            "| {:<max_alias_len$} | {:<max_ip_len$}",
-            alias,
-            ip
-        );
+        println!("| {:<max_alias_len$} | {:<max_ip_len$}", alias, ip);
     }
 
     Ok(())
@@ -274,12 +271,12 @@ pub fn print_peer_list() -> Result<(), String> {
 
 /// Ping an address to check that it is online. If TCP stream is established, stream is closed,
 /// and Ok is returned. If TCP stream is not established, Err is returned.
-/// 
+///
 /// `peer` can be the IP of the sender or an alias associated with an IP in the peer list
 pub fn ping_peer(peer: &String) -> Result<String, String> {
     let addr = match resolve_peer(&peer) {
         Ok(a) => a,
-        Err(e) => return Err(e)
+        Err(e) => return Err(e),
     };
     let send_addr = format!("{addr}:7878");
 
@@ -297,7 +294,7 @@ pub fn ping_peer(peer: &String) -> Result<String, String> {
 
     match TcpStream::connect_timeout(&socket_addr, timeout) {
         Ok(_) => return Ok(format!("{addr} is online!")),
-        Err(_) => return Err(format!("{addr} did not respond to ping in time"))
+        Err(_) => return Err(format!("{addr} did not respond to ping in time")),
     }
 }
 
@@ -311,7 +308,9 @@ fn perform_dh_handshake(mut stream: &TcpStream) -> Result<Aes256Gcm, String> {
 
     // read public key from peer
     let mut peer_public_key_bytes: [u8; 32] = [0; 32];
-    stream.read_exact(&mut peer_public_key_bytes).expect("Failed to read peer's public key");
+    stream
+        .read_exact(&mut peer_public_key_bytes)
+        .expect("Failed to read peer's public key");
     let peer_public_key = PublicKey::from(peer_public_key_bytes);
 
     // send local public key to peer
@@ -384,16 +383,16 @@ fn connect_stream(addr: &String) -> TcpStream {
 pub fn request_catalog(peer: &String) -> Result<String, String> {
     let addr = match resolve_peer(&peer) {
         Ok(a) => a,
-        Err(e) => return Err(e)
+        Err(e) => return Err(e),
     };
 
     let mut stream = connect_stream(&addr);
 
     let cipher = match perform_dh_handshake(&stream) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Diffie-Hellman handshake failed: {e}"))
+        Err(e) => return Err(format!("Diffie-Hellman handshake failed: {e}")),
     };
-    
+
     // send mode packet
     let mut nonce: [u8; 12] = [0; 12];
     let req_catalog_packet = packet::encode_packet(String::from("request_catalog").into_bytes());
@@ -409,29 +408,29 @@ pub fn request_catalog(peer: &String) -> Result<String, String> {
             Ok(_) => {
                 let decrypted = match encryption::decrypt_message(&mut nonce, &cipher, &buffer) {
                     Ok(p) => p,
-                    Err(e) => return Err(format!("Failed to decrypt packet: {e}"))
+                    Err(e) => return Err(format!("Failed to decrypt packet: {e}")),
                 };
 
                 let packet = match packet::decode_packet(decrypted) {
                     Ok(p) => p,
-                    Err(e) => return Err(format!("Failed to decode packet: {e}"))
+                    Err(e) => return Err(format!("Failed to decode packet: {e}")),
                 };
 
                 catalog_bytes.extend_from_slice(&packet.data);
-            },
+            }
             Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
-            Err(e) => return Err(format!("Error reading from stream: {e}"))
+            Err(e) => return Err(format!("Error reading from stream: {e}")),
         }
     }
 
     let catalog_json = match String::from_utf8(catalog_bytes) {
         Ok(s) => s,
-        Err(e) => return Err(format!("Failed to parse catalog as UTF-8: {e}"))
+        Err(e) => return Err(format!("Failed to parse catalog as UTF-8: {e}")),
     };
 
     let catalog: CatalogMap = match serde_json::from_str(&catalog_json) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to deserialize catalog into hash map: {e}"))
+        Err(e) => return Err(format!("Failed to deserialize catalog into hash map: {e}")),
     };
 
     if catalog.is_empty() {
@@ -461,9 +460,7 @@ pub fn request_catalog(peer: &String) -> Result<String, String> {
     // format table header
     let mut catalog_string = format!(
         "| {:<hash_len$} | {:<max_name_len$} | {:<max_size_len$}",
-        "SHA-256 Hash",
-        "File Name",
-        "Size"
+        "SHA-256 Hash", "File Name", "Size"
     );
 
     // 2 gives space for the bars separating columns
@@ -502,11 +499,11 @@ fn await_file_metadata(
     }
     let file_path = match encryption::decrypt_message(nonce, &cipher, &buffer) {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
+        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}")),
     };
     let file_path_packet = match packet::decode_packet(file_path) {
         Ok(p) => p,
-        Err(e) => return Err(format!("Unable to decode packet: {e}"))
+        Err(e) => return Err(format!("Unable to decode packet: {e}")),
     };
     let file_path = String::from_utf8_lossy(file_path_packet.data.as_slice());
 
@@ -516,13 +513,15 @@ fn await_file_metadata(
     }
     let packet_bytes = match encryption::decrypt_message(nonce, &cipher, &buffer) {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
+        Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}")),
     };
     let file_size_packet = match packet::decode_packet(packet_bytes) {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to decode packet: {e}"))
+        Err(e) => return Err(format!("Failed to decode packet: {e}")),
     };
-    let file_size_array: [u8; 8] = file_size_packet.data.try_into().expect("Vec must have exactly 8 elements");
+    let file_size_array: [u8; 8] = file_size_packet.data
+        .try_into()
+        .expect("Vec must have exactly 8 elements");
     let file_size = u64::from_be_bytes(file_size_array);
 
     Ok((String::from(file_path), file_size))
@@ -537,11 +536,7 @@ fn print_loading_bar(bytes_sent: u64, total_bytes: u64, bytes_per_sec: u64, tick
     let empty = BAR_WIDTH - filled;
     let spinner = SPINNER[tick % SPINNER.len()];
 
-    let progress_bar = format!(
-        "[{}{}]",
-        "=".repeat(filled),
-        " ".repeat(empty)
-    );
+    let progress_bar = format!("[{}{}]", "=".repeat(filled), " ".repeat(empty));
 
     print!(
         "\r{} {:>8}/s {} {:>5.1}% {:>10}/{}", // format the percent right-defined, field width of 5 characters, and show one decimal place
@@ -564,14 +559,13 @@ fn save_incoming_file(
     nonce: &mut [u8; 12],
     mut stream: TcpStream,
     mut save_path: PathBuf,
-    hash: &String
+    hash: &String,
 ) -> Result<(), String> {
-
     let file_metadata = match await_file_metadata(&cipher, nonce, &stream) {
         Ok(output) => output,
-        Err(e) => return Err(e)
+        Err(e) => return Err(e),
     };
-    
+
     let file_name = file_metadata.0;
     let file_size = file_metadata.1;
 
@@ -579,7 +573,7 @@ fn save_incoming_file(
     save_path.push(&file_name);
     let mut file = match file_rw::open_writable_file(&save_path) {
         Ok(f) => f,
-        Err(e) => return Err(e)
+        Err(e) => return Err(e),
     };
 
     println!("Downloading \"{file_name}\"...");
@@ -594,13 +588,15 @@ fn save_incoming_file(
         let mut buffer = [0u8; packet::PACKET_SIZE + encryption::AES256GCM_VER_TAG_SIZE];
         match stream.read_exact(&mut buffer) {
             Ok(_) => (),
-            Err(e) if e.kind() == ErrorKind::UnexpectedEof =>  {
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
                 // End connection
                 println!("\r✓ [{}] 100.0% {}", "=".repeat(BAR_WIDTH), " ".repeat(35));
 
                 // verify file hash is correct
                 if let Err(e) = file.sync_all() {
-                    return Err(format!("Failed to ensure all data was written to file: {e}"));
+                    return Err(format!(
+                        "Failed to ensure all data was written to file: {e}"
+                    ));
                 }
 
                 // for big files where hashing takes forever, this helps the user understand
@@ -609,47 +605,52 @@ fn save_incoming_file(
 
                 let hash_bytes = match file_rw::read_file_bytes(&save_path) {
                     Ok(b) => b,
-                    Err(e) => return Err(e)
+                    Err(e) => return Err(e),
                 };
                 let computed_file_hash = packet::compute_sha256_hash(&hash_bytes);
 
                 // computed file hash is raw bytes but hash is hexadecimal, so convert hash to raw bytes to match
                 let expected_hash = match hex::decode(hash) {
                     Ok(b) => b,
-                    Err(e) => return Err(format!("Failed to decode hash into raw bytes from hex: {e}")),
+                    Err(e) => {
+                        return Err(format!("Failed to decode hash into raw bytes from hex: {e}"));
+                    }
                 };
 
                 if computed_file_hash != expected_hash {
-                    return Err(String::from("Failed to verify file hash. File not received correctly."))
+                    return Err(String::from(
+                        "Failed to verify file hash. File not received correctly.",
+                    ));
                 } else {
                     println!("Successfully downloaded \"{file_name}\"");
                 }
+
                 return Ok(());
-            },
-            Err(e) => return Err(format!("Failed to read from stream: {e}"))
+            }
+            Err(e) => return Err(format!("Failed to read from stream: {e}")),
         };
 
         let packet_bytes = match encryption::decrypt_message(nonce, &cipher, &buffer) {
             Ok(p) => p,
-            Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}"))
+            Err(e) => return Err(format!("Failed to decrypt ciphertext: {e}")),
         };
 
         let received_packet = match packet::decode_packet(packet_bytes) {
             Ok(p) => p,
-            Err(e) => return Err(format!("Unable to decode packet: {e}"))
+            Err(e) => return Err(format!("Unable to decode packet: {e}")),
         };
 
         let data_bytes_delta: u64 = received_packet.data_length.try_into().unwrap();
         curr_bytes_read += data_bytes_delta;
         if let Err(e) = file.write_all(&received_packet.data) {
-            return Err(format!("Failed to write byte to file: {e}"))
+            return Err(format!("Failed to write byte to file: {e}"));
         }
 
         bytes_per_sec += data_bytes_delta;
 
         // update loading bar if UPDATE_DELAY_MS has elapsed
         if last_update.elapsed() >= update_interval {
-            bytes_per_sec *= 1000/UPDATE_DELAY_MS;
+            bytes_per_sec *= 1000 / UPDATE_DELAY_MS;
             print_loading_bar(curr_bytes_read, file_size, bytes_per_sec, tick);
             tick += 1;
             bytes_per_sec = 0;
@@ -659,22 +660,24 @@ fn save_incoming_file(
 }
 
 
+
 /// Returns the IP associated with the given alias (from the peer catalog)
 fn get_ip_from_peer_list(alias: &String) -> Result<String, String> {
     // load existing catalog or create a new one
     let catalog = match get_deserialized_peer_list() {
         Ok(c) => c,
-        Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
+        Err(e) => return Err(format!("Failed to retreive peer list: {e}")),
     };
 
     // get IP from peer list
     let ip = match catalog.get(alias) {
         Some(i) => i.to_owned(),
-        None => return Err(format!("Requested alias does not exist in catalog"))
+        None => return Err(format!("Requested alias does not exist in catalog")),
     };
 
     Ok(ip)
 }
+
 
 
 /// Takes in a peer (either alias or IP address) and returns an IP address
@@ -685,7 +688,7 @@ fn resolve_peer(peer: &String) -> Result<String, String> {
 
     match get_ip_from_peer_list(&peer) {
         Ok(a) => Ok(a),
-        Err(e) => return Err(format!("Failed to retrieve IP associated with {peer}: {e}"))
+        Err(e) => return Err(format!("Failed to retrieve IP associated with {peer}: {e}")),
     }
 }
 
@@ -722,7 +725,7 @@ fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
 }
 
 /// Send a request for a file by its `hash` to the `peer`, saving it in `file_path`.
-/// 
+///
 /// `peer` can be an IP or an alias saved in the peer list associated with an IP.
 /// 
 /// ## Example
@@ -762,17 +765,18 @@ pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
             return;
         }
     };
-    let mut nonce: [u8; 12] = [0; 12];
-
+    
     // send mode packet
     let req_catalog_packet = packet::encode_packet(String::from("request_file").into_bytes());
+    let mut nonce: [u8; 12] = [0; 12];
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet) {
         eprintln!("Failed to send request for sender catalog {e}");
         return;
     }
 
     // send file hash
-    let file_hash_packet = packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
+    let file_hash_packet = packet::encode_packet(hex::decode(&hash)
+        .expect("Unable to decode hexadecimal string"));
     if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet) {
         eprintln!("{e}");
         return;
@@ -784,13 +788,15 @@ pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
     }
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{listener};
+    use crate::listener;
+    use serial_test::serial;
     use std::{fs, net::TcpListener};
     use tokio::runtime::Runtime;
-    use serial_test::serial;
 
     #[test]
     fn test_peer_list_workflow() {
@@ -800,10 +806,10 @@ mod tests {
 
         let had_existing = if list_path.exists() {
             fs::rename(&list_path, &backup_path).is_ok()
-            } else {
-                false
+        } else {
+            false
         };
-        
+
         // add items to a peer list
         let map = PeerMap::new();
         let write_result = write_updated_peer_list(&map);
@@ -815,12 +821,12 @@ mod tests {
         // verify add was completed correctly
         let read_result = get_deserialized_peer_list();
         assert!(read_result.is_ok());
-        
+
         let read_result = read_result.unwrap();
         assert_eq!(read_result.len(), 2);
         assert_eq!(read_result.get("alice"), Some(&"10.0.0.1".to_string()));
         assert_eq!(read_result.get("bob"), Some(&"10.0.0.2".to_string()));
-        
+
         // remove a peer
         assert!(remove_from_peer_list(&String::from("alice")).is_ok());
         
@@ -829,7 +835,7 @@ mod tests {
         assert_eq!(final_read.len(), 1);
         assert!(!final_read.contains_key("alice"));
         assert!(final_read.contains_key("bob"));
-        
+
         // cleanup
         if let Err(e) = fs::remove_file(&list_path) {
             eprintln!("Failed to remove testing file: {e}");
@@ -843,9 +849,7 @@ mod tests {
     async fn listen_for_one_connection() {
         let listen_addr = String::from("0.0.0.0:7878");
         let listener = match TcpListener::bind(&listen_addr) {
-            Ok(l) => {
-                l
-            },
+            Ok(l) => l,
             Err(e) => {
                 eprintln!("Failed to bind: {}", e);
                 return;
