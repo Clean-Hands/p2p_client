@@ -628,7 +628,7 @@ mod tests {
                 false
         };
 
-        // add files to catalog
+        // add file to catalog
         let catalog = CatalogMap::new();
         let write_result = write_updated_catalog(&catalog_path, &catalog);
         assert!(write_result.is_ok());
