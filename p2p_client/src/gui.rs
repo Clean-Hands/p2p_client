@@ -38,15 +38,16 @@ impl P2PGui {
                 ui.text_edit_singleline(&mut self.save_path)
             });
         });
-
         ui.horizontal(|ui| {
             ui.label("Peer:");
-            ui.add_sized([200.0, 20.0], |ui: &mut egui::Ui| {
-                ui.text_edit_singleline(&mut self.peer)
-            });
-            if ui.button("Request Catalog").clicked() {
+            let peer_input = ui.add(
+                egui::TextEdit::singleline(&mut self.peer)
+                    .desired_width(200.0)
+                    .hint_text("Enter peer alias or IP")
+            );
+            if peer_input.lost_focus() || ui.button("Request Catalog").clicked() {
                 if let Err(e) = requester::ping_peer(&self.peer) {
-                    self.error_string = e
+                    self.error_string = e;
                 } else {
                     let catalog_string = match requester::request_catalog(&self.peer) {
                         Ok(c) => c,
@@ -55,11 +56,13 @@ impl P2PGui {
                             String::new()
                         }
                     };
+
                     let catalog_lines: Vec<Vec<&str>> = catalog_string
                         .lines()
                         .filter(|line| line.contains('.'))
                         .map(|line| line.split('|').rev().collect::<Vec<&str>>())
                         .collect();
+
                     self.file_options = vec![];
                     for mut line in catalog_lines {
                         let hash = line.split_off(2).join("").trim().to_string();
