@@ -710,6 +710,7 @@ fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
                         Err(e) => Err(format!("Failed to retrieve HOME environment variable: {e}")),
                     }
                 } else {
+                    // TODO: handle tildes for windows users
                     Ok(path)
                 }
             },
