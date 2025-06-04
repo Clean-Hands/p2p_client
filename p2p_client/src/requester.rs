@@ -628,23 +628,30 @@ fn resolve_input(peer: &String) -> Result<String, String> {
 /// If the path contains a tilde, this function replaces it with the HOME path. If the path
 /// does not contain a tilde, returns the given path with no changes.
 fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
-    match path.to_str() {
-        Some(p) => {
-            if let Some(stripped) = p.strip_prefix("~/") {
-                match env::var("HOME") {
-                    Ok(home) => Ok(PathBuf::from(home).join(stripped)),
-                    Err(e) => Err(format!("Failed to retrieve HOME environment variable: {e}")),
+    let os = env::consts::OS;
+
+    // macos and linux have a HOME environment variable, windows does not
+    if os == "macos" || os == "linux" {
+        match path.to_str() {
+            Some(p) => {
+                if let Some(stripped) = p.strip_prefix("~/") {
+                    match env::var("HOME") {
+                        Ok(home) => Ok(PathBuf::from(home).join(stripped)),
+                        Err(e) => Err(format!("Failed to retrieve HOME environment variable: {e}")),
+                    }
+                } else if p == "~" {
+                    match env::var("HOME") {
+                        Ok(home) => Ok(PathBuf::from(home)),
+                        Err(e) => Err(format!("Failed to retrieve HOME environment variable: {e}")),
+                    }
+                } else {
+                    Ok(path)
                 }
-            } else if p == "~" {
-                match env::var("HOME") {
-                    Ok(home) => Ok(PathBuf::from(home)),
-                    Err(e) => Err(format!("Failed to retrieve HOME environment variable: {e}")),
-                }
-            } else {
-                Ok(path)
-            }
-        },
-        None => Err("Failed to convert path to string".to_string()),
+            },
+            None => Err("Failed to convert path to string".to_string()),
+        }
+    } else {
+        Ok(path)
     }
 }
 
