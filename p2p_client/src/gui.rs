@@ -134,21 +134,21 @@ impl P2PGui {
 impl eframe::App for P2PGui {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-    // Top panel for navigation tabs
-    TopBottomPanel::top("nav_panel").show(ctx, |ui| {
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.current_tab, AppTab::Request, "Request Files");
-            ui.selectable_value(&mut self.current_tab, AppTab::Listen, "Share Files");
+        // Top panel for navigation tabs
+        TopBottomPanel::top("nav_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.current_tab, AppTab::Request, "Request Files");
+                ui.selectable_value(&mut self.current_tab, AppTab::Listen, "Share Files");
+            });
         });
-    });
 
-    // Main content panel
-    CentralPanel::default().show(ctx, |ui| {
-        match self.current_tab {
-            AppTab::Request => self.show_request_tab(ui),
-            AppTab::Listen => self.show_listen_tab(ui),
-        }
-    });
+        // Main content panel
+        CentralPanel::default().show(ctx, |ui| {
+            match self.current_tab {
+                AppTab::Request => self.show_request_tab(ui),
+                AppTab::Listen => self.show_listen_tab(ui),
+            }
+        });
 
         if self.error_string != String::new() {
             egui::Window::new("Error")
