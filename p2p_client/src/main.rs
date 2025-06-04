@@ -1,6 +1,6 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! May 30th, 2025
+//! June 4th, 2025
 //! CS347 Advanced Software Design
 
 use clap::{Parser, Subcommand};
@@ -114,13 +114,13 @@ fn main() {
                 peer_address
             } => {
                 if let Err(e) = requester::add_ip_to_peers(&alias, &peer_address) {
-                    eprintln!("Error adding IP to list of peers: {e}");
+                    eprintln!("Failed to add {alias} ({peer_address}) to list of peers: {e}");
                     return;
                 }
             },
             RequestCommand::RemoveIP { peer } => {
                 if let Err(e) = requester::remove_ip_from_peer_list(&peer) {
-                    eprintln!("Error removing IP from list of peers: {e}");
+                    eprintln!("Failed to remove {peer} from list of peers: {e}");
                     return;
                 }
             },

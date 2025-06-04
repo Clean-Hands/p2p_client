@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 30th, 2025
+//! June 4rd, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -69,8 +69,12 @@ fn get_peer_list_path() -> Result<PathBuf, String> {
 
 /// Returns peer list as Hashmap given the absolute path to it
 /// If there is no peers.json file, creates the file and returns an empty Hashmap
-fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<PeerMap, String> {
+pub fn get_deserialized_peer_list() -> Result<PeerMap, String> {
     let peer_list: PeerMap;
+    let peer_list_path = match get_peer_list_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}"))
+    };
 
     if peer_list_path.exists() {
         let serialized = match fs::read_to_string(&peer_list_path) {
@@ -87,18 +91,23 @@ fn get_deserialized_peer_list(peer_list_path: &PathBuf) -> Result<PeerMap, Strin
     } else {
         // create the file if it doesn't exist
         let empty_list: PeerMap = HashMap::new();
-        write_updated_peer_list(peer_list_path, &empty_list)?;
+        write_updated_peer_list(&empty_list)?;
         peer_list = empty_list;
     }
 
-    return Ok(peer_list);
+    Ok(peer_list)
 }
 
 
 
 /// Writes changes made to peer_list. If there is not file at the given path, it will create a file and
 /// populate it with a bare json list: {}
-fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Result<(), String> {
+fn write_updated_peer_list(peer_list: &PeerMap) -> Result<(), String> {
+    let peer_list_path = match get_peer_list_path() {
+        Ok(p) => p,
+        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}"))
+    };
+
     // write updated peer list to peers.json
     let mut json_file = match File::create(peer_list_path) {
         Ok(f) => f,
@@ -123,12 +132,7 @@ fn write_updated_peer_list(peer_list_path: &PathBuf, peer_list: &PeerMap) -> Res
 /// Given an IP and alias for the IP as input, stores them in peers.json
 /// found in a static directory. See get_peer_list_path() for peers.json locations
 pub fn add_ip_to_peers(alias: &String, peer_addr: &String) -> Result<(), String> {
-    let peer_list_path = match get_peer_list_path() {
-        Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
-    };
-
-    let mut peer_list = match get_deserialized_peer_list(&peer_list_path) {
+    let mut peer_list = match get_deserialized_peer_list() {
         Ok(c) => c,
         Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
     };
@@ -136,7 +140,7 @@ pub fn add_ip_to_peers(alias: &String, peer_addr: &String) -> Result<(), String>
     // add/update entry in peer_list
     peer_list.insert(alias.clone(), peer_addr.clone());
 
-    if let Err(e) = write_updated_peer_list(&peer_list_path, &peer_list) {
+    if let Err(e) = write_updated_peer_list(&peer_list) {
         return Err(format!("Error writing updated catalog: {}", e));
     }
 
@@ -151,12 +155,7 @@ pub fn add_ip_to_peers(alias: &String, peer_addr: &String) -> Result<(), String>
 ///
 /// If the input alias is `DELETE-ALL` then all entries in the catalog will be removed
 pub fn remove_ip_from_peer_list(alias: &String) -> Result<(), String> {
-    let peer_list_path = match get_peer_list_path() {
-        Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
-    };
-
-    let mut peer_list = match get_deserialized_peer_list(&peer_list_path) {
+    let mut peer_list = match get_deserialized_peer_list() {
         Ok(c) => c,
         Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
     };
@@ -175,7 +174,7 @@ pub fn remove_ip_from_peer_list(alias: &String) -> Result<(), String> {
     }
 
     // write updated catalog to catalog.json
-    if let Err(e) = write_updated_peer_list(&peer_list_path, &peer_list) {
+    if let Err(e) = write_updated_peer_list(&peer_list) {
         return Err(format!("Error writing updated catalog: {}", e))
     }
 
@@ -186,12 +185,7 @@ pub fn remove_ip_from_peer_list(alias: &String) -> Result<(), String> {
 
 /// Displays the contents of the peer list
 pub fn view_peer_list() -> Result<(), String> {
-    let peer_list_path = match get_peer_list_path() {
-        Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}"))
-    };
-
-    let peer_list = match get_deserialized_peer_list(&peer_list_path) {
+    let peer_list = match get_deserialized_peer_list() {
         Ok(c) => c,
         Err(e) => return Err(format!("Failed to retrieve peer list: {e}"))
     };
@@ -603,12 +597,7 @@ fn save_incoming_file(
 /// Returns the IP associated with the given alias (from the peer catalog)
 fn get_ip_from_peer_list(alias: &String) -> Result<String, String> {
     // load existing catalog or create a new one
-    let peer_list_path = match get_peer_list_path() {
-        Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retreive peer list path: {e}"))
-    };
-
-    let catalog = match get_deserialized_peer_list(&peer_list_path) {
+    let catalog = match get_deserialized_peer_list() {
         Ok(c) => c,
         Err(e) => return Err(format!("Failed to retreive peer list: {e}"))
     };

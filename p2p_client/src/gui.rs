@@ -1,10 +1,10 @@
 //! gui.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 3rd, 2025
+//! June 4rd, 2025
 //! CS347 Advanced Software Design
 
 use std::path::PathBuf;
-
+use std::collections::HashMap;
 use eframe::egui::{self, Align, CentralPanel, Layout, TopBottomPanel};
 use crate::requester;
 
@@ -19,8 +19,9 @@ pub struct P2PGui {
     error_string: String,
     peer: String,
     save_path: String,
-    options: Vec<String>,
-    hashes: Vec<String>,
+    file_options: Vec<(String, String)>,
+    peer_vec: Vec<(String, String)>,
+    new_peer_vec: Vec<(String, String)>,
     modify_peers: bool,
     current_tab: AppTab
 }
@@ -63,11 +64,11 @@ impl P2PGui {
                             .rev()
                             .collect::<Vec<&str>>())
                         .collect();
-                    self.hashes = vec![];
-                    self.options = vec![];
+                    self.file_options = vec![];
                     for mut line in catalog_lines {
-                        self.hashes.push(line.split_off(2).join("").trim().to_string());
-                        self.options.push(line.join("      ").trim().to_string());
+                        let hash = line.split_off(2).join("").trim().to_string();
+                        let file_info = line.join("      ").trim().to_string();
+                        self.file_options.push((file_info, hash));
                     }
                 }
             }
@@ -78,10 +79,10 @@ impl P2PGui {
                 egui::ScrollArea::vertical()
                     .min_scrolled_width(300.0)
                     .show(ui, |ui| {
-                        if self.options.len() > 0 {
-                            for i in 0..self.options.len() {
-                                if ui.button(&self.options[i]).double_clicked() {
-                                    requester::request_file(self.peer.to_owned(), self.hashes[i].to_owned(), PathBuf::from(&self.save_path));
+                        if self.file_options.len() > 0 {
+                            for i in 0..self.file_options.len() {
+                                if ui.button(&self.file_options[i].0).double_clicked() {
+                                    requester::request_file(self.peer.to_owned(), self.file_options[i].1.to_owned(), PathBuf::from(&self.save_path));
                                 }
                             }
                         } else {
@@ -93,12 +94,25 @@ impl P2PGui {
 
         ui.horizontal(|ui| {
             if ui.button("Add/Remove Peers").clicked() {
+                self.peer_vec = vec![];
+                let peer_hashmap = match requester::get_deserialized_peer_list() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        self.error_string = e;
+                        HashMap::new()
+                    }
+                };
+
+                for peer in peer_hashmap {
+                    self.peer_vec.push(peer.to_owned());
+                }
+                self.new_peer_vec = self.peer_vec.clone();
                 self.modify_peers = true;
             }
             
-            if ui.button("Set Download Folder").clicked() {
-                *self = P2PGui::default();
-            }
+            // if ui.button("Reset GUI").clicked() {
+            //     *self = P2PGui::default();
+            // }
         });
     }
 
@@ -122,8 +136,9 @@ impl P2PGui {
             error_string: String::new(),
             peer: String::new(),
             save_path: String::from(std::env::current_dir().unwrap_or(PathBuf::from(".")).to_str().unwrap_or(".")),
-            options: vec![],
-            hashes: vec![],
+            file_options: vec![],
+            peer_vec: vec![],
+            new_peer_vec: vec![],
             modify_peers: false,
             current_tab: AppTab::Request
         }
@@ -170,12 +185,46 @@ impl eframe::App for P2PGui {
                 .collapsible(false)
                 .resizable(false)
                 .show(ctx, |ui| {
-                    ui.label("This is a dialog window!");
+                    ui.group(|ui| {
+                        ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
+                            egui::ScrollArea::vertical()
+                                .min_scrolled_width(300.0)
+                                .show(ui, |ui| {
+                                    if self.peer_vec != vec![] {
+                                        for (alias, addr) in &mut self.new_peer_vec {
+                                            ui.horizontal(|ui| {
+                                                ui.add_sized([150.0, 20.0], |ui: &mut egui::Ui| {
+                                                    ui.text_edit_singleline(alias)
+                                                });
+                                                ui.add_sized([150.0, 20.0], |ui: &mut egui::Ui| {
+                                                    ui.text_edit_singleline(addr)
+                                                });
+                                            });
+                                        }
+                                    } else {
+                                        ui.label("Peer list is empty.");
+                                    }
+                                });
+                        });
+                    });
                     ui.horizontal(|ui| {
-                        if ui.button("OK").clicked() {
+                        if ui.button("Save").clicked() {
+                            for i in 0..self.peer_vec.len() {
+                                let (alias, addr) = &self.peer_vec[i];
+                                let (new_alias, new_addr) = &self.new_peer_vec[i];
+                                if alias != new_alias || addr != new_addr {
+                                    if let Err(e) = requester::remove_ip_from_peer_list(&alias) {
+                                        self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
+                                    }
+                                    if let Err(e) = requester::add_ip_to_peers(&new_alias, &new_addr) {
+                                        self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
+                                    }
+                                }
+                            }
                             self.modify_peers = false;
                         }
                         if ui.button("Cancel").clicked() {
+                            // close the peers window without submitting any changes
                             self.modify_peers = false;
                         }
                     });
