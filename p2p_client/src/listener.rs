@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 29th, 2025
+//! June 4th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -123,6 +123,15 @@ fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result
 
 /// Given a file path as input, computes hash of the file, then stores the hash and absolute file path in
 /// catalog.json found in a static directory. See get_catalog_path() for catalog directory locations
+/// 
+/// ## Example
+/// 
+/// ```rust
+/// if let Err(e) = listener::add_file_to_catalog(&file_path) {
+///     eprintln!("Error adding file to catalog: {e}");
+///     return;
+/// }
+/// ```
 pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
@@ -176,6 +185,16 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 /// Given a file hash as input, removes the associated entry from the catalog
 ///
 /// If the input hash is `DELETE-ALL` then all entries in the catalog will be removed
+/// 
+/// ## Example
+/// 
+/// ```rust
+/// let hash = String::from("a04be9a1841bd200e6ed9bd431ca71cd176b9779be9f52ef58635bacf10e04fc");
+/// if let Err(e) = remove_file_from_catalog(&hash) {
+///     eprintln!("Error removing file from catalog: {e}");
+///     return;
+/// }
+/// ```
 pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
@@ -211,7 +230,16 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
 
 
 /// Displays the contents of the user's local catalog
-pub fn view_catalog() -> Result<(), String> {
+/// 
+/// ## Example
+/// 
+/// ```rust
+/// if let Err(e) = print_catalog() {
+///     eprintln!("Unable to print catalog: {e}");
+///     return;
+/// }
+/// ```
+pub fn print_catalog() -> Result<(), String> {
     let catalog_path = match get_catalog_path() {
         Ok(p) => p,
         Err(e) => return Err(format!("Failed to retrieve catalog path: {e}"))

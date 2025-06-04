@@ -97,7 +97,7 @@ fn main() {
                 }
             },
             RequestCommand::Ping { peer } => {
-                match requester::ping_addr(&peer) {
+                match requester::ping_peer(&peer) {
                     Ok(result) => {
                         println!("{result}")
                     },
@@ -113,20 +113,20 @@ fn main() {
                 alias,
                 peer_address
             } => {
-                if let Err(e) = requester::add_ip_to_peers(&alias, &peer_address) {
+                if let Err(e) = requester::add_peer(&alias, &peer_address) {
                     eprintln!("Failed to add {alias} ({peer_address}) to list of peers: {e}");
                     return;
                 }
             },
             RequestCommand::RemoveIP { peer } => {
-                if let Err(e) = requester::remove_ip_from_peer_list(&peer) {
+                if let Err(e) = requester::remove_from_peer_list(&peer) {
                     eprintln!("Failed to remove {peer} from list of peers: {e}");
                     return;
                 }
             },
             RequestCommand::ViewIPS {} => {
-                if let Err(e) = requester::view_peer_list() {
-                    eprintln!("Unable to view peer_list: {}", e);
+                if let Err(e) = requester::print_peer_list() {
+                    eprintln!("Failed to print peer list: {e}");
                     return;
                 }
             }
@@ -138,8 +138,8 @@ fn main() {
                 listener::start_listening();
             },
             ListenCommand::ViewCatalog {} => {
-                if let Err(e) = listener::view_catalog() {
-                    eprintln!("Unable to view catalog: {}", e);
+                if let Err(e) = listener::print_catalog() {
+                    eprintln!("Failed to print catalog: {e}");
                     return;
                 }
             },

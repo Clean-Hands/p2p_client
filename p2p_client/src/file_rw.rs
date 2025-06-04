@@ -1,6 +1,6 @@
 //! file_rw.rs
 //! by Lazuli Kleinhans, Ruben Boero
-//! May 28th, 2025
+//! June 4th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
@@ -12,7 +12,7 @@ use std::path::PathBuf;
 ///
 /// If you don't want to read in all of the bytes at once, consider using `open_iterable_file()`
 ///
-/// # Example
+/// ## Example
 ///
 /// ```rust
 /// let bytes = match read_file_bytes(&String::from("test.txt")) {
@@ -33,7 +33,7 @@ pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
 ///
 /// If you want to write bytes in multiple bursts, consider using `open_writable_file()`
 ///
-/// # Example
+/// ## Example
 ///
 /// ```rust
 /// if let Err(e) = write_file_bytes(&String::from("test.txt"), vec![104, 101, 108, 108, 111]) {
@@ -55,7 +55,7 @@ pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), Stri
 /// Useful if you don't want to write all bytes at once or be able to
 /// pause and continue writing bytes without losing your place in the file
 ///
-/// # Example
+/// ## Example
 ///
 /// ```rust
 /// let mut file = match open_writable_file(&String::from("test.txt")) {

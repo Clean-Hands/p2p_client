@@ -1,6 +1,6 @@
 //! gui.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 4rd, 2025
+//! June 4th, 2025
 //! CS347 Advanced Software Design
 
 use std::path::PathBuf;
@@ -46,7 +46,7 @@ impl P2PGui {
                 ui.text_edit_singleline(&mut self.peer)
             });
             if ui.button("Request Catalog").clicked() {
-                if let Err(e) = requester::ping_addr(&self.peer) {
+                if let Err(e) = requester::ping_peer(&self.peer) {
                     self.error_string = e
                 } else {
                     let catalog_string = match requester::request_catalog(&self.peer) {
@@ -213,10 +213,10 @@ impl eframe::App for P2PGui {
                                 let (alias, addr) = &self.peer_vec[i];
                                 let (new_alias, new_addr) = &self.new_peer_vec[i];
                                 if alias != new_alias || addr != new_addr {
-                                    if let Err(e) = requester::remove_ip_from_peer_list(&alias) {
+                                    if let Err(e) = requester::remove_from_peer_list(&alias) {
                                         self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
                                     }
-                                    if let Err(e) = requester::add_ip_to_peers(&new_alias, &new_addr) {
+                                    if let Err(e) = requester::add_peer(&new_alias, &new_addr) {
                                         self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
                                     }
                                 }
