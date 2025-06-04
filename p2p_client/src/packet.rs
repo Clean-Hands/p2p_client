@@ -1,13 +1,13 @@
 //! packet.rs
 //! by Ruben Boero, Liam Keane, Lazuli Kleinhans
-//! May 27th, 2025
+//! June 4th, 2025
 //! CS347 Advanced Software Design
 
 use byteorder::{BigEndian, ByteOrder};
 use sha2::{Digest, Sha256};
 use std::mem;
 
-pub const PACKET_SIZE: usize = 1024 * 16 ; // 16KB
+pub const PACKET_SIZE: usize = 1024 * 16; // 16KB
 
 
 
@@ -17,7 +17,7 @@ pub const PACKET_SIZE: usize = 1024 * 16 ; // 16KB
 #[derive(Default, Debug, PartialEq)]
 pub struct Packet {
     pub data_length: u16,
-    pub data: Vec<u8> // up to PACKET_SIZE-2 bytes
+    pub data: Vec<u8>, // up to PACKET_SIZE-2 bytes
 }
 
 
@@ -31,10 +31,12 @@ pub fn compute_sha256_hash(data: &Vec<u8>) -> Vec<u8> {
 
 /// Extract data from an encoded packet
 ///
-/// Returns `Result` type that contains `Err` if the chunk hash verification fails 
+/// Returns `Result` type that contains `Err` if the chunk hash verification fails
 /// If it succeeds in decoding the packet, returns `Ok` with the created `Packet` struct
 pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> {
-    let mut packet: Packet = Packet{..Default::default()};
+    let mut packet: Packet = Packet {
+        ..Default::default()
+    };
     let mut offset = 0;
 
     // convert data length bytes into u16
@@ -65,7 +67,7 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
     let mut packet = [0u8; PACKET_SIZE];
     let mut offset = 0;
-    
+
     // append data length
     let data_length: u16 = (mem::size_of::<u16>() + data.len()) as u16;
     if data_length > PACKET_SIZE as u16 {
@@ -88,13 +90,16 @@ pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
 // The output is then hard coded in the tests. Not sure of better way to fix them.
 mod tests {
     use super::*;
-    use crate::packet::{self, Packet, PACKET_SIZE};
+    use crate::packet::{self, PACKET_SIZE, Packet};
 
     #[test]
     fn test_encode_packet() {
         let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
         let actual: [u8; PACKET_SIZE] = packet::encode_packet(data.clone());
-        let expected: [u8; PACKET_SIZE] = [vec![0, 13], data, vec![0u8; PACKET_SIZE-13]].concat().try_into().unwrap();
+        let expected: [u8; PACKET_SIZE] = [vec![0, 13], data, vec![0u8; PACKET_SIZE - 13]]
+            .concat()
+            .try_into()
+            .unwrap();
 
         assert_eq!(actual, expected);
     }
@@ -103,7 +108,7 @@ mod tests {
     fn test_decode_packet() {
         let expected = Packet {
             data_length: 13,
-            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1]
+            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
         };
 
         let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
@@ -134,7 +139,7 @@ mod tests {
     fn test_unequal_packets() {
         let expected = Packet {
             data_length: 87,
-            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1]
+            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
         };
 
         let data = vec![10, 9, 8, 7, 6, 5, 4, 3, 2, 1];

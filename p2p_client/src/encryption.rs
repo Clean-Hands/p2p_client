@@ -1,6 +1,6 @@
 //! encryption.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! May 19th, 2025
+//! June 4th, 2025
 //! CS347 Advanced Software Design
 
 use crate::packet;
@@ -39,7 +39,7 @@ pub fn encrypt_message(
     let enc_nonce = Nonce::from_slice(nonce);
     let ciphertext = match cipher.encrypt(&enc_nonce, message.as_ref()) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Encryption failed: {}", e))
+        Err(e) => return Err(format!("Encryption failed: {}", e)),
     };
 
     increment_nonce(nonce);
@@ -63,8 +63,8 @@ pub fn decrypt_message(
                 plaintext_as_array[i] = plaintext[i];
             }
             plaintext_as_array
-        },
-        Err(e) => return Err(format!("Decryption failed {}", e))
+        }
+        Err(e) => return Err(format!("Decryption failed {}", e)),
     };
     increment_nonce(nonce);
     Ok(plaintext_as_array)
@@ -82,7 +82,7 @@ pub fn send_to_connection(
     // encrypt message
     let ciphertext = match encrypt_message(nonce, cipher, &message) {
         Ok(c) => c,
-        Err(e) => return Err(format!("Encryption failed: {e}"))
+        Err(e) => return Err(format!("Encryption failed: {e}")),
     };
 
     if let Err(e) = stream.write_all(&ciphertext) {

@@ -1,6 +1,6 @@
 //! file_rw.rs
 //! by Lazuli Kleinhans, Ruben Boero
-//! May 28th, 2025
+//! June 4th, 2025
 //! CS347 Advanced Software Design
 
 use std::fs::{self, File};
@@ -23,7 +23,7 @@ use std::path::PathBuf;
 pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
     match fs::read(file_path) {
         Ok(d) => Ok(d),
-        Err(e) => Err(format!("Unable to read in file: {e}"))
+        Err(e) => Err(format!("Unable to read in file: {e}")),
     }
 }
 
@@ -44,7 +44,7 @@ pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
 pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), String> {
     match fs::write(file_path, bytes) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("Failed to write bytes to file: {e}"))
+        Err(e) => Err(format!("Failed to write bytes to file: {e}")),
     }
 }
 
@@ -75,25 +75,25 @@ pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), Stri
 pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
     match File::create(file_path) {
         Ok(f) => Ok(f),
-        Err(e) => return Err(format!("Couldn't open file: {e}"))
+        Err(e) => return Err(format!("Couldn't open file: {e}")),
     }
 }
 
 
 
 /// Returns the size of a given file in bytes by reading the file's metadata
-/// 
+///
 /// *does not read entire file into memory*
-/// 
+///
 pub fn get_file_size(file_path: &PathBuf) -> Result<u64, String> {
     let file = match File::open(file_path) {
         Ok(f) => f,
-        Err(e) => return Err(format!("Failed to open file in get_file_size(): {e}"))
+        Err(e) => return Err(format!("Failed to open file in get_file_size(): {e}")),
     };
 
     let metadata = match file.metadata() {
         Ok(m) => m,
-        Err(e) => return Err(format!("Failed to get metadata for: {e}"))
+        Err(e) => return Err(format!("Failed to get metadata for: {e}")),
     };
 
     Ok(metadata.len())
@@ -133,14 +133,14 @@ mod tests {
 
         let mut file = match open_writable_file(&test_file_name) {
             Ok(f) => f,
-            Err(e) => panic!("{e}")
+            Err(e) => panic!("{e}"),
         };
         file.write_all(&to_write1).expect("Failed to write to file");
         file.write_all(&to_write2).expect("Failed to write to file");
 
         let actual_data = match read_file_bytes(&test_file_name) {
             Ok(b) => b,
-            Err(e) => panic!("{e}")
+            Err(e) => panic!("{e}"),
         };
 
         assert_eq!(actual_data, expected_data);
