@@ -876,6 +876,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_pinging_offline_peer() {
         let result = ping_peer(&"127.0.0.1".to_string());
         assert!(result.is_err());

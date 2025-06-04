@@ -168,6 +168,7 @@ fn main() {
 mod tests {
 
     use crate::{listener, packet::compute_sha256_hash, requester};
+    use serial_test::serial;
     use std::{
         fs,
         io::{BufWriter, Write},
@@ -209,7 +210,7 @@ mod tests {
     }
 
     #[test]
-
+    #[serial]
     /// send a file between two peers and verify its integrity
     fn test_send_file() {
         // initialize file
