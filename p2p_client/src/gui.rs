@@ -3,14 +3,15 @@
 //! June 4th, 2025
 //! CS347 Advanced Software Design
 
-use std::path::PathBuf;
-use std::collections::HashMap;
-use eframe::egui::{self, Align, CentralPanel, Layout, TopBottomPanel};
 use crate::requester;
+use eframe::egui::{self, Align, CentralPanel, Layout, TopBottomPanel};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 enum AppTab {
-    #[default] Request,
+    #[default]
+    Request,
     Listen,
 }
 
@@ -23,12 +24,10 @@ pub struct P2PGui {
     peer_vec: Vec<(String, String)>,
     new_peer_vec: Vec<(String, String)>,
     modify_peers: bool,
-    current_tab: AppTab
+    current_tab: AppTab,
 }
 
-
 impl P2PGui {
-
     fn show_request_tab(&mut self, ui: &mut egui::Ui) {
         ui.heading("Request a file:");
         ui.separator();
@@ -59,10 +58,7 @@ impl P2PGui {
                     let catalog_lines: Vec<Vec<&str>> = catalog_string
                         .lines()
                         .filter(|line| line.contains('.'))
-                        .map(|line| line
-                            .split('|')
-                            .rev()
-                            .collect::<Vec<&str>>())
+                        .map(|line| line.split('|').rev().collect::<Vec<&str>>())
                         .collect();
                     self.file_options = vec![];
                     for mut line in catalog_lines {
@@ -82,7 +78,11 @@ impl P2PGui {
                         if self.file_options.len() > 0 {
                             for i in 0..self.file_options.len() {
                                 if ui.button(&self.file_options[i].0).double_clicked() {
-                                    requester::request_file(self.peer.to_owned(), self.file_options[i].1.to_owned(), PathBuf::from(&self.save_path));
+                                    requester::request_file(
+                                        self.peer.to_owned(),
+                                        self.file_options[i].1.to_owned(),
+                                        PathBuf::from(&self.save_path)
+                                    );
                                 }
                             }
                         } else {
@@ -109,7 +109,7 @@ impl P2PGui {
                 self.new_peer_vec = self.peer_vec.clone();
                 self.modify_peers = true;
             }
-            
+
             // if ui.button("Reset GUI").clicked() {
             //     *self = P2PGui::default();
             // }
@@ -127,7 +127,7 @@ impl P2PGui {
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
-        
+
         Self::default()
     }
 
@@ -135,19 +135,22 @@ impl P2PGui {
         Self {
             error_string: String::new(),
             peer: String::new(),
-            save_path: String::from(std::env::current_dir().unwrap_or(PathBuf::from(".")).to_str().unwrap_or(".")),
+            save_path: String::from(
+                std::env::current_dir()
+                    .unwrap_or(PathBuf::from("."))
+                    .to_str()
+                    .unwrap_or(".")
+            ),
             file_options: vec![],
             peer_vec: vec![],
             new_peer_vec: vec![],
             modify_peers: false,
-            current_tab: AppTab::Request
+            current_tab: AppTab::Request,
         }
     }
 }
 
-
 impl eframe::App for P2PGui {
-
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Top panel for navigation tabs
         TopBottomPanel::top("nav_panel").show(ctx, |ui| {
@@ -158,11 +161,9 @@ impl eframe::App for P2PGui {
         });
 
         // Main content panel
-        CentralPanel::default().show(ctx, |ui| {
-            match self.current_tab {
-                AppTab::Request => self.show_request_tab(ui),
-                AppTab::Listen => self.show_listen_tab(ui),
-            }
+        CentralPanel::default().show(ctx, |ui| match self.current_tab {
+            AppTab::Request => self.show_request_tab(ui),
+            AppTab::Listen => self.show_listen_tab(ui),
         });
 
         if self.error_string != String::new() {
@@ -178,7 +179,7 @@ impl eframe::App for P2PGui {
                     }
                 });
         }
-        
+
         // Confirmation dialog
         if self.modify_peers {
             egui::Window::new("Known Peers")
