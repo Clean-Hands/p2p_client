@@ -34,7 +34,7 @@ pub struct P2PGui {
 /// Adds "..." to indicate the string has been truncated
 pub fn truncate_from_left(s: &str, max_len: usize) -> String {
     if max_len <= 3 {
-        return s[max_len..].to_string();
+        return format!("…{}", s[..(max_len - 1)].to_string());
     }
 
     if s.len() <= max_len {
@@ -159,7 +159,10 @@ impl P2PGui {
                                     let hash_len = "Short Hash".len();
                                     let catalog_vec: Vec<_> = catalog_map.iter().collect();
 
-                                    let max_path_len = 25;
+                                    // guessing what a good path len is. Would be better to use the window 
+                                    // size and subtract hash and size len, but idk how to do that
+                                    let max_path_len = 27;
+
                                     // If we just want to print file name, can use below to get the max name len
                                     // let max_name_len = catalog_vec
                                     //     .iter()
