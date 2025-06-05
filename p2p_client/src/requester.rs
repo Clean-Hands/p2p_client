@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 4th, 2025
+//! June 5th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -713,13 +713,13 @@ fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
                         Err(e) => Err(format!("Failed to retrieve HOME environment variable: {e}")),
                     }
                 } else {
-                    // TODO: handle tildes for windows users
                     Ok(path)
                 }
             },
             None => Err("Failed to convert path to string".to_string()),
         }
     } else {
+        // TODO: handle tildes for windows users
         Ok(path)
     }
 }

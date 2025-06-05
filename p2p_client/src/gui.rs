@@ -1,14 +1,16 @@
 //! gui.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 4th, 2025
+//! June 5th, 2025
 //! CS347 Advanced Software Design
 
-use crate::requester;
 use crate::listener;
-use eframe::egui::{self, Align, CentralPanel, Layout, TopBottomPanel};
-use std::collections::HashMap;
-use std::path::{PathBuf, Path};
+use crate::requester;
+use eframe::egui::{self, Align, CentralPanel, Key, Layout, TextEdit, TopBottomPanel, Vec2};
 use size::Size;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 enum AppTab {
@@ -28,7 +30,10 @@ pub struct P2PGui {
     modify_peers: bool,
     current_tab: AppTab,
     catalog: Option<HashMap<String, listener::FileInfo>>,
+    catalog_width: usize,
 }
+
+
 
 impl P2PGui {
     fn show_request_tab(&mut self, ui: &mut egui::Ui) {
@@ -37,19 +42,24 @@ impl P2PGui {
 
         ui.horizontal(|ui| {
             ui.label("Save path:");
-            ui.add_sized([300.0, 20.0], |ui: &mut egui::Ui| {
-                ui.text_edit_singleline(&mut self.save_path)
-            });
+            ui.add(
+                TextEdit::singleline(&mut self.save_path)
+                    .desired_width(f32::INFINITY)
+            );
         });
         ui.horizontal(|ui| {
             ui.label("Peer:");
             let peer_input = ui.add(
-                egui::TextEdit::singleline(&mut self.peer)
-                    .desired_width(200.0)
-                    .hint_text("Enter peer alias or IP")
+                TextEdit::singleline(&mut self.peer)
+                    .desired_width(227.0) // set width to line up Request Catalog button with edge of window
+                    .hint_text("Enter peer alias or IP"),
             );
             // allow user to request catalog by pressing enter key
-            if peer_input.lost_focus() || ui.button("Request Catalog").clicked() {
+            let enter_pressed = peer_input.lost_focus() && ui.ctx().input(|i| {
+                i.key_pressed(Key::Enter)
+            });
+
+            if enter_pressed || ui.button("Request Catalog").clicked() {
                 if let Err(e) = requester::ping_peer(&self.peer) {
                     self.error_string = e;
                 } else {
@@ -77,6 +87,7 @@ impl P2PGui {
             }
         });
 
+        // Displaying the requested catalog and its available files
         ui.group(|ui| {
             ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
                 egui::ScrollArea::vertical()
@@ -88,7 +99,7 @@ impl P2PGui {
                                     requester::request_file(
                                         self.peer.to_owned(),
                                         self.file_options[i].1.to_owned(),
-                                        PathBuf::from(&self.save_path)
+                                        PathBuf::from(&self.save_path),
                                     );
                                 }
                             }
@@ -123,80 +134,86 @@ impl P2PGui {
         });
     }
 
+
+
     fn show_listen_tab(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Share files (Listen mode):");
+        ui.heading("Local Catalog:");
         ui.separator();
         ui.group(|ui| {
-            ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
-                egui::ScrollArea::vertical()
-                    .min_scrolled_width(300.0)
-                    .show(ui, |ui| {
-                        // refer to saved catalog to display available files (saved in update())
-                        match &self.catalog {
-                            Some(catalog_map) => {
-                                if catalog_map.is_empty() {
-                                    ui.label("Your catalog is empty.");
-                                } else {
-                                    ui.label("Your catalog:");
+            egui::ScrollArea::both()
+                .min_scrolled_width(350.0)
+                .show(ui, |ui| {
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(self.catalog_width as f32, 0.0), // fixed width, auto height
+                        Layout::top_down(Align::LEFT),
+                        |ui| {
+                            // refer to saved catalog to display available files (saved in update())
+                            match &self.catalog {
+                                Some(catalog_map) => {
+                                    if catalog_map.is_empty() {
+                                        ui.label("Your catalog is empty.");
+                                    } else {
+                                        let catalog_vec: Vec<_> = catalog_map.iter().collect();
 
-                                    // only show hash characters that will fit under the heading
-                                    let hash_len = "Short Hash".len();
-                                    let catalog_vec: Vec<_> = catalog_map.iter().collect();
+                                        let max_name_len = catalog_vec
+                                            .iter()
+                                            .filter_map(|(_, info)| {
+                                                Path::new(&info.file_path)
+                                                    .file_name()
+                                                    .and_then(|n| n.to_str())
+                                                    .map(|name| name.len())
+                                            })
+                                            .max()
+                                            .unwrap_or("File Name".len());
 
-                                    let max_name_len = catalog_vec
-                                        .iter()
-                                        .filter_map(|(_, info)| {
-                                            Path::new(&info.file_path)
+                                        let max_size_len = catalog_vec
+                                            .iter()
+                                            .map(|(_, info)| {
+                                                Size::from_bytes(info.file_size).to_string().len()
+                                            })
+                                            .max()
+                                            .unwrap_or("Size".len());
+
+                                        // draw table header
+                                        ui.monospace(format!(
+                                            "{:<max_name_len$}  {:<max_size_len$}",
+                                            "File Name", "Size",
+                                        ));
+
+                                        self.catalog_width = (max_name_len + max_size_len) * 8;
+
+                                        ui.separator();
+
+                                        // draw each row
+                                        for (_hash, info) in catalog_vec {
+                                            let file_name = Path::new(&info.file_path)
                                                 .file_name()
                                                 .and_then(|n| n.to_str())
-                                                .map(|name| name.len())
-                                        })
-                                        .max()
-                                        .unwrap_or("File Name".len());
+                                                .unwrap_or("invalid UTF-8");
+                                            let file_size =
+                                                Size::from_bytes(info.file_size).to_string();
 
-                                    let max_size_len = catalog_vec
-                                        .iter()
-                                        .map(|(_, info)| Size::from_bytes(info.file_size).to_string().len())
-                                        .max()
-                                        .unwrap_or("Size".len());
+                                            let row_text = format!(
+                                                "{:<max_name_len$}  {:<max_size_len$}",
+                                                file_name, file_size,
+                                            );
 
-                                    // draw table header
-                                    ui.monospace(format!(
-                                        "{:<hash_len$}  {:<max_name_len$}  {:<max_size_len$}",
-                                        "Short Hash", "File Path", "Size",
-                                    ));
-
-                                    ui.separator();
-
-                                    // draw each row
-                                    for (hash, info) in catalog_vec {
-                                        let short_hash = &hash[..hash_len];
-                                        let file_name = Path::new(&info.file_path)
-                                            .file_name()
-                                            .and_then(|n| n.to_str())
-                                            .unwrap_or("invalid UTF-8");
-                                        let file_size = Size::from_bytes(info.file_size).to_string();
-
-                                        let row_text = format!(
-                                            "{:<hash_len$}  {:<max_name_len$}  {:<max_size_len$}",
-                                            short_hash,
-                                            file_name,
-                                            file_size,
-                                        );
-                                        
-                                        // show the full file path when you hover over a row
-                                        ui.monospace(row_text).on_hover_text(&info.file_path);
+                                            // show the full file path when you hover over a row
+                                            ui.monospace(row_text).on_hover_text(&info.file_path);
+                                        }
                                     }
                                 }
+                                None => {
+                                    ui.label("Failed to load catalog.");
+                                }
                             }
-                            None => {
-                                ui.label("Failed to load catalog.");
-                            }
-                        }
-                    });
-            });
+                        },
+                    );
+                });
         });
     }
+
+
 
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // TODO
@@ -208,6 +225,8 @@ impl P2PGui {
         Self::default()
     }
 
+
+
     fn default() -> Self {
         Self {
             error_string: String::new(),
@@ -216,17 +235,20 @@ impl P2PGui {
                 std::env::current_dir()
                     .unwrap_or(PathBuf::from("."))
                     .to_str()
-                    .unwrap_or(".")
+                    .unwrap_or("."),
             ),
             file_options: vec![],
             peer_vec: vec![],
             new_peer_vec: vec![],
             modify_peers: false,
             current_tab: AppTab::Request,
-            catalog: None
+            catalog: None,
+            catalog_width: 500,
         }
     }
 }
+
+
 
 impl eframe::App for P2PGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -235,11 +257,15 @@ impl eframe::App for P2PGui {
         // Top panel for navigation tabs
         TopBottomPanel::top("nav_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.selectable_label(self.current_tab == AppTab::Request, "Request Files").clicked() {
+                if ui
+                    .selectable_label(self.current_tab == AppTab::Request, "Request Files")
+                    .clicked() {
                     self.current_tab = AppTab::Request;
                 }
-                
-                if ui.selectable_value(&mut self.current_tab, AppTab::Listen, "Share Files").clicked() {
+
+                if ui
+                    .selectable_value(&mut self.current_tab, AppTab::Listen, "Share Files")
+                    .clicked() {
                     self.current_tab = AppTab::Listen;
                 }
             });
@@ -285,7 +311,7 @@ impl eframe::App for P2PGui {
                 });
         }
 
-        // Confirmation dialog
+        // Modify peer dialog window
         if self.modify_peers {
             egui::Window::new("Known Peers")
                 .collapsible(false)

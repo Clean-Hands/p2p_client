@@ -1,24 +1,24 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! June 4th, 2025
+//! June 5th, 2025
 //! CS347 Advanced Software Design
 
 use clap::{Parser, Subcommand};
+use eframe::{self, egui::ViewportBuilder};
 use std::path::PathBuf;
-use eframe::{self, egui};
 mod encryption;
 mod file_rw;
+mod gui;
 mod listener;
 mod packet;
 mod requester;
-mod gui;
 
 #[derive(Parser)]
 #[command(name = "p2p_client")]
 #[command(about = "Send a file from one peer to another", long_about = None)]
 struct Cli {
     #[command(subcommand)]
-    mode: Option<Mode>
+    mode: Option<Mode>,
 }
 
 #[derive(Subcommand)]
@@ -79,24 +79,20 @@ fn main() {
             } => {
                 requester::request_file(peer, file_hash, save_path.unwrap_or(PathBuf::from(".")));
             }
-            RequestCommand::Catalog { peer } => {
-                match requester::request_catalog(&peer) {
-                    Ok(result) => {
-                        println!("{result}")
-                    },
-                    Err(e) => {
-                        eprintln!("Error while requesting catalog: {e}")
-                    }
+            RequestCommand::Catalog { peer } => match requester::request_catalog(&peer) {
+                Ok(result) => {
+                    println!("{result}")
                 }
-            }
-            RequestCommand::Ping { peer } => {
-                match requester::ping_peer(&peer) {
-                    Ok(result) => {
-                        println!("{result}")
-                    }
-                    Err(e) => {
-                        println!("{e}")
-                    }
+                Err(e) => {
+                    eprintln!("Error while requesting catalog: {e}")
+                }
+            },
+            RequestCommand::Ping { peer } => match requester::ping_peer(&peer) {
+                Ok(result) => {
+                    println!("{result}")
+                }
+                Err(e) => {
+                    println!("{e}")
                 }
             },
             // TODO: do we want to change the name of the below command since we're using the alias
@@ -151,14 +147,17 @@ fn main() {
         },
 
         None => {
-            // User didn't pass a CLI option, therefore open the GUI            
+            // User didn't pass a CLI option, therefore open the GUI
             eframe::run_native(
                 "P2P Client GUI",
-                eframe::NativeOptions { 
-                    viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 300.0]), // Set window size
+                eframe::NativeOptions {
+                    viewport: ViewportBuilder::default()
+                        .with_inner_size([400.0, 300.0])
+                        .with_resizable(false)
+                        .with_maximize_button(false), // Set window size
                     ..Default::default() // Set all options other than `viewport` to their defaults
                 },
-                Box::new(|cc| Ok(Box::new(gui::P2PGui::new(cc))))
+                Box::new(|cc| Ok(Box::new(gui::P2PGui::new(cc)))),
             ).unwrap();
         }
     }
