@@ -7,7 +7,7 @@ use crate::requester;
 use crate::listener;
 use eframe::egui::{self, Align, CentralPanel, Layout, TopBottomPanel};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use size::Size;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -28,22 +28,6 @@ pub struct P2PGui {
     modify_peers: bool,
     current_tab: AppTab,
     catalog: Option<HashMap<String, listener::FileInfo>>,
-}
-
-/// Truncates a string by keeping the maximum allowed right most characters.
-/// Adds "..." to indicate the string has been truncated
-pub fn truncate_from_left(s: &str, max_len: usize) -> String {
-    if max_len <= 3 {
-        return format!("…{}", s[..(max_len - 1)].to_string());
-    }
-
-    if s.len() <= max_len {
-        return s.to_string();
-    }
-
-    let available_space = max_len - 3; // allow 3 spaces for ...
-    let suffix = &s[s.len() - available_space..];
-    format!("...{}", suffix)
 }
 
 impl P2PGui {
@@ -159,21 +143,16 @@ impl P2PGui {
                                     let hash_len = "Short Hash".len();
                                     let catalog_vec: Vec<_> = catalog_map.iter().collect();
 
-                                    // guessing what a good path len is. Would be better to use the window 
-                                    // size and subtract hash and size len, but idk how to do that
-                                    let max_path_len = 27;
-
-                                    // If we just want to print file name, can use below to get the max name len
-                                    // let max_name_len = catalog_vec
-                                    //     .iter()
-                                    //     .filter_map(|(_, info)| {
-                                    //         Path::new(&info.file_path)
-                                    //             .file_name()
-                                    //             .and_then(|n| n.to_str())
-                                    //             .map(|name| name.len())
-                                    //     })
-                                    //     .max()
-                                    //     .unwrap_or("File Name".len());
+                                    let max_name_len = catalog_vec
+                                        .iter()
+                                        .filter_map(|(_, info)| {
+                                            Path::new(&info.file_path)
+                                                .file_name()
+                                                .and_then(|n| n.to_str())
+                                                .map(|name| name.len())
+                                        })
+                                        .max()
+                                        .unwrap_or("File Name".len());
 
                                     let max_size_len = catalog_vec
                                         .iter()
@@ -183,10 +162,8 @@ impl P2PGui {
 
                                     // draw table header
                                     ui.monospace(format!(
-                                        "{:<hash_len$}  {:<max_path_len$}  {:<max_size_len$}",
+                                        "{:<hash_len$}  {:<max_name_len$}  {:<max_size_len$}",
                                         "Short Hash", "File Path", "Size",
-                                        hash_len = hash_len,
-                                        max_size_len = max_size_len,
                                     ));
 
                                     ui.separator();
@@ -194,22 +171,21 @@ impl P2PGui {
                                     // draw each row
                                     for (hash, info) in catalog_vec {
                                         let short_hash = &hash[..hash_len];
-                                        // let file_name = Path::new(&info.file_path)
-                                        //     .file_name()
-                                        //     .and_then(|n| n.to_str())
-                                        //     .unwrap_or("invalid UTF-8");
+                                        let file_name = Path::new(&info.file_path)
+                                            .file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or("invalid UTF-8");
                                         let file_size = Size::from_bytes(info.file_size).to_string();
 
-                                        ui.monospace(format!(
-                                            "{:<hash_len$}  {:<max_path_len$}  {:<max_size_len$}",
+                                        let row_text = format!(
+                                            "{:<hash_len$}  {:<max_name_len$}  {:<max_size_len$}",
                                             short_hash,
-                                            truncate_from_left(&info.file_path, max_path_len),
-                                            // file_name,
+                                            file_name,
                                             file_size,
-                                            hash_len = hash_len,
-                                            max_path_len = 25,
-                                            max_size_len = max_size_len,
-                                        ));
+                                        );
+                                        
+                                        // show the full file path when you hover over a row
+                                        ui.monospace(row_text).on_hover_text(&info.file_path);
                                     }
                                 }
                             }
