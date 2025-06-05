@@ -28,10 +28,11 @@ use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type CatalogMap = HashMap<String, FileInfo>;
 
+// this struct is public because it is used within gui.rs to populate listener information
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
-struct FileInfo {
-    file_path: String,
-    file_size: u64,
+pub struct FileInfo {
+    pub file_path: String,
+    pub file_size: u64,
 }
 
 impl FileInfo {
@@ -53,7 +54,8 @@ impl FileInfo {
 /// Linux: `/home/[user]/.local/share/p2p_client`
 /// macOS: `/Users/[user]/Library/Application Support/com.LLR.p2p_client`
 /// Windows: `C:\Users\[user]\AppData\Roaming\LLR\p2p_client\data`
-fn get_catalog_path() -> Result<PathBuf, String> {
+// this function is public because it is used within gui.rs
+pub fn get_catalog_path() -> Result<PathBuf, String> {
     // find existing catalog or create a new one
     let mut catalog_path = match ProjectDirs::from("com", "LLR", "p2p_client") {
         Some(d) => d.data_dir().to_owned().to_path_buf(),
@@ -73,7 +75,8 @@ fn get_catalog_path() -> Result<PathBuf, String> {
 
 /// Returns catalog as Hashmap given the absolute path to it.
 /// If there is no catalog.json file, creates the file and returns an empty Hashmap
-fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String> {
+// This function needs to be public bc it is called within gui.rs
+pub fn get_deserialized_catalog(catalog_path: &PathBuf) -> Result<CatalogMap, String> {
     let catalog: CatalogMap;
 
     if catalog_path.exists() {
