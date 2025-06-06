@@ -18,8 +18,8 @@ Tests are present as modules at the bottom of the following files:
 Our code is split into two independent halves: requester and listener. As such, the code can be manually tested by creating a requester and listener process on the same local machine. 
 
 To setup manual testing on a single machine:
-- Open 2 terminal windows
+- Open 2 terminal windows.
 - Use the first window as the sender. Follow the above instructions for sending files in this window
 - Use the second window as the requester. Follow the above instructions for downloading files in this window.   
-  - You can use `127.0.0.1` (localhost) as the IP address to request from, or you can specify the IP address of your machine on your network
+  - You can use `127.0.0.1` (localhost) as the IP address to request from, or you can specify the IP address of your machine on your network.
   - **WARNING**: If you try to save the file in the same directory as you are uploading it from, the sender and requester will be reading and writing to the same file, which will corrupt the file's contents.
