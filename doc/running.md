@@ -4,6 +4,8 @@ Ensure you have navigated to the `p2p_client` directory before attempting to run
 
 (These commands use [cargo](https://doc.rust-lang.org/book/ch01-03-hello-cargo.html#building-and-running-a-cargo-project) to build and run the rust program.)
 
+# NEED TO UPDATE RUNNING TO INCLUDE GUI SECTION
+
 ## Quick Start
 
 ### Sending Files

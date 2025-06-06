@@ -14,12 +14,14 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 - Clone [our repository](https://github.com/rubenboero21/cs347)
   - `git clone https://github.com/rubenboero21/cs347.git`
 
+# UPDATE BELOW TO MATCH GUI AND/OR EXECUTABLE
 ### Run the code
 - Navigate to the `p2p_client` directory
 - Run `cargo run` to build and run the app
   - By running with no arguments, the app will display the available commands.
   - Alternatively, refer to the quick start guide and available commands below.
 - You can generate and open local documentation for our app by running `cargo doc --open`.
+- You can run our unit tests with `cargo test`. See [testing.md](https://github.com/rubenboero21/cs347/blob/main/doc/testing.md) for more details.
 
 <details>
 <summary>Quick Start</summary>
@@ -45,7 +47,7 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 </details>
 
 <details>
-<summary>Available Commands</summary>
+<summary>Available CLI Commands</summary>
 
 ### `listen` subcommand
   - Listen for incoming file requests:
@@ -78,6 +80,9 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 
 
 ## Existing Features
+- # UPDATE BELOW BULLET POINT
+- A graphical user interface can be started by running `cargo run`. 
+  - The same functionalities listed below exists for the user running the gui.
 - **As a listener:** 
   - Start a listener that sends requested files to peers. The listener can handle multiple requests at once via [rust's asynchronous feature](https://rust-lang.github.io/async-book/).
     - `cargo run listen start`
@@ -108,4 +113,8 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 
 
 ## TODO
-We acknowledge that the current state of the program is cumbersome to use, requiring many commands to be run to request a single file, as well as copying and pasting long strings of text. To address this, we are working on a graphical user interface with the same features as our command line interface. 
+# UPDATE LATER
+- We have a rudimentary graphical user interface working, but it could be made better in the following ways:
+ - UPDATE
+
+- Our unit tests are not able to test the functionality of our code across devices. To make our tests more robust, implementing a system to test automatic across device testing would be beneficial.
