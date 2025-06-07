@@ -61,7 +61,6 @@ impl P2PGui {
                 if let Err(e) = requester::ping_peer(&self.peer) {
                     self.error_string = e;
                 } else {
-                    std::thread::sleep(std::time::Duration::from_secs(10));
                     let catalog_string = match requester::request_catalog(&self.peer) {
                         Ok(c) => c,
                         Err(e) => {
