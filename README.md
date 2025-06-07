@@ -5,9 +5,6 @@ Our project is a [peer-to-peer](https://en.wikipedia.org/wiki/Peer-to-peer) file
 
 A peer-to-peer file-sharing network is a [decentralized network](https://en.wikipedia.org/wiki/Decentralized_web) where each member of the network can send and receive files to any other member. An instance acting as a requester initiates a connection with a second instance acting as a listener. The listener will then send the requested file to the requester.
 
-Many peer-to-peer networks have a centralized server to provide a way to discover other peers to connect to. We do not have this functionality yet, but we may add it if we have time. 
-
-
 ## Getting Started for Developers
 ### Install dependencies
 - Install rust and other necessary tools by following [this guide](https://doc.rust-lang.org/book/ch01-01-installation.html) to install rustup.
@@ -117,4 +114,5 @@ Many peer-to-peer networks have a centralized server to provide a way to discove
 - We have a rudimentary graphical user interface working, but it could be made better in the following ways:
  - UPDATE
 
-- Our unit tests are not able to test the functionality of our code across devices. To make our tests more robust, implementing a system to test automatic across device testing would be beneficial.
+- Our unit tests are not able to test the functionality of our code across devices. To make our tests more robust, implementing a system to automatically test across device testing would be beneficial.
+- If a Windows user pings themselves, an error occurs.

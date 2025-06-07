@@ -1,6 +1,6 @@
 //! gui.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 5th, 2025
+//! June 6th, 2025
 //! CS347 Advanced Software Design
 
 use crate::listener;
@@ -47,6 +47,7 @@ impl P2PGui {
                     .desired_width(f32::INFINITY)
             );
         });
+        ui.add_space(5.0);
         ui.horizontal(|ui| {
             ui.label("Peer:");
             let peer_input = ui.add(
@@ -54,15 +55,13 @@ impl P2PGui {
                     .desired_width(227.0) // set width to line up Request Catalog button with edge of window
                     .hint_text("Enter peer alias or IP"),
             );
-            // allow user to request catalog by pressing enter key
-            let enter_pressed = peer_input.lost_focus() && ui.ctx().input(|i| {
-                i.key_pressed(Key::Enter)
-            });
+            let enter_pressed = ui.ctx().input(|i| i.key_pressed(Key::Enter)) && peer_input.lost_focus();
 
-            if enter_pressed || ui.button("Request Catalog").clicked() {
+            if enter_pressed || ui.button("Request Catalog").clicked() {                
                 if let Err(e) = requester::ping_peer(&self.peer) {
                     self.error_string = e;
                 } else {
+                    std::thread::sleep(std::time::Duration::from_secs(10));
                     let catalog_string = match requester::request_catalog(&self.peer) {
                         Ok(c) => c,
                         Err(e) => {
@@ -86,6 +85,7 @@ impl P2PGui {
                 }
             }
         });
+        ui.add_space(5.0);
 
         // Displaying the requested catalog and its available files
         ui.group(|ui| {
@@ -109,6 +109,7 @@ impl P2PGui {
                     });
             });
         });
+        ui.add_space(5.0);
 
         ui.horizontal(|ui| {
             if ui.button("Add/Remove Peers").clicked() {
@@ -305,6 +306,7 @@ impl eframe::App for P2PGui {
                     ui.heading("Oh no :(");
                     ui.add_space(10.0);
                     ui.label(&self.error_string);
+                    ui.add_space(10.0);
                     if ui.button("aw dang it").clicked() {
                         self.error_string = String::new();
                     }
@@ -318,32 +320,62 @@ impl eframe::App for P2PGui {
                 .resizable(false)
                 .show(ctx, |ui| {
                     ui.group(|ui| {
-                        ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
-                            egui::ScrollArea::vertical()
-                                .min_scrolled_width(300.0)
-                                .show(ui, |ui| {
-                                    if self.peer_vec != vec![] {
-                                        for (alias, addr) in &mut self.new_peer_vec {
+                        egui::ScrollArea::vertical()
+                            .max_height(100.0)
+                            .show(ui, |ui| {
+                                if self.peer_vec != vec![] {
+                                    for (new_alias, new_addr) in &mut self.new_peer_vec {
+                                        if new_alias.len() != 0 || new_addr.len() != 0 {
                                             ui.horizontal(|ui| {
-                                                ui.add_sized([150.0, 20.0], |ui: &mut egui::Ui| {
-                                                    ui.text_edit_singleline(alias)
-                                                });
-                                                ui.add_sized([150.0, 20.0], |ui: &mut egui::Ui| {
-                                                    ui.text_edit_singleline(addr)
-                                                });
+                                                ui.add_sized([150.0, 20.0],
+                                                    TextEdit::singleline(new_alias).hint_text("Alias")
+                                                );
+                                                ui.add_sized([120.0, 20.0],
+                                                    TextEdit::singleline(new_addr).hint_text("IP Address")
+                                                );
+                                                if ui.button("🗑").clicked() {
+                                                    new_alias.clear();
+                                                    new_addr.clear();
+                                                }
                                             });
                                         }
-                                    } else {
-                                        ui.label("Peer list is empty.");
                                     }
-                                });
-                        });
+                                } else {
+                                    ui.label("Peer list is empty.");
+                                }
+                            });
+                            ui.add_space(5.0);
+                            ui.allocate_ui_with_layout(Vec2::new(0.0, 0.0), Layout::left_to_right(Align::Center), |ui| {
+                                if ui.add_sized(Vec2::new(305.0, 0.0), egui::Button::new("+ Add New Peer")).clicked() {
+                                    self.new_peer_vec.push(("New Alias".to_string(), "New IP Address".to_string()));
+                                }
+                            });
                     });
                     ui.horizontal(|ui| {
                         if ui.button("Save").clicked() {
-                            for i in 0..self.peer_vec.len() {
-                                let (alias, addr) = &self.peer_vec[i];
+                            for i in 0..self.new_peer_vec.len() {
+
                                 let (new_alias, new_addr) = &self.new_peer_vec[i];
+                                // if a peer was added, add new peer to local peer list
+                                if i >= self.peer_vec.len() {
+                                    if new_alias.len() > 0 && new_addr.len() > 0 {
+                                        if let Err(e) = requester::add_peer(&new_alias, &new_addr) {
+                                            self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
+                                        }
+                                    }
+                                    continue;
+                                }
+
+                                let (alias, addr) = &self.peer_vec[i];
+                                // if a peer was deleted, remove peer from local peer list
+                                if new_alias.len() == 0 && new_addr.len() == 0 {
+                                    if let Err(e) = requester::remove_from_peer_list(&alias) {
+                                        self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
+                                    }
+                                    continue;
+                                }
+
+                                // if a peer was modified, update the local peer list
                                 if alias != new_alias || addr != new_addr {
                                     if let Err(e) = requester::remove_from_peer_list(&alias) {
                                         self.error_string = format!("Failed to remove {alias} from list of peers: {e}");

@@ -1,10 +1,11 @@
 //! main.rs
 //! by Ruben Boero, Lazuli Kleinhans, Liam Keane
-//! June 5th, 2025
+//! June 6th, 2025
 //! CS347 Advanced Software Design
 
 use clap::{Parser, Subcommand};
 use eframe::{self, egui::ViewportBuilder};
+use tokio::runtime::Runtime;
 use std::path::PathBuf;
 mod encryption;
 mod file_rw;
@@ -124,7 +125,7 @@ fn main() {
         // parse the listen subcommand
         Some(Mode::Listen { command }) => match command {
             ListenCommand::Start {} => {
-                listener::start_listening();
+                let _ = async { listener::start_listening().await };
             }
             ListenCommand::ViewCatalog {} => {
                 if let Err(e) = listener::print_catalog() {
@@ -148,17 +149,26 @@ fn main() {
 
         None => {
             // User didn't pass a CLI option, therefore open the GUI
+
+            // start listening as soon as gui is started
+            let runtime = Runtime::new().expect("Failed to create a runtime");
+            let _ = runtime.enter();
+            runtime.spawn(listener::start_listening());
+            
             eframe::run_native(
                 "P2P Client GUI",
                 eframe::NativeOptions {
                     viewport: ViewportBuilder::default()
-                        .with_inner_size([400.0, 300.0])
+                        .with_inner_size([400.0, 300.0]) // Set window size
                         .with_resizable(false)
-                        .with_maximize_button(false), // Set window size
+                        .with_maximize_button(false), 
                     ..Default::default() // Set all options other than `viewport` to their defaults
                 },
                 Box::new(|cc| Ok(Box::new(gui::P2PGui::new(cc)))),
             ).unwrap();
+
+            // Kill the async listening task
+            runtime.shutdown_background();
         }
     }
 }

@@ -1,6 +1,6 @@
 //! listener.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 4th, 2025
+//! June 6th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -128,9 +128,9 @@ fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result
 
 /// Given a file path as input, computes hash of the file, then stores the hash and absolute file path in
 /// catalog.json found in a static directory. See get_catalog_path() for catalog directory locations
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust
 /// if let Err(e) = listener::add_file_to_catalog(&file_path) {
 ///     eprintln!("Error adding file to catalog: {e}");
@@ -192,9 +192,9 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 /// Given a file hash as input, removes the associated entry from the catalog
 ///
 /// If the input hash is `DELETE-ALL` then all entries in the catalog will be removed
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust
 /// let hash = String::from("a04be9a1841bd200e6ed9bd431ca71cd176b9779be9f52ef58635bacf10e04fc");
 /// if let Err(e) = remove_file_from_catalog(&hash) {
@@ -226,7 +226,7 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
                     .to_string_lossy()
                     .into_owned();
                 println!("Successfully removed {file_name} ({hash}) from catalog")
-            }
+            },
         };
     }
 
@@ -241,9 +241,9 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
 
 
 /// Displays the contents of the user's local catalog
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust
 /// if let Err(e) = print_catalog() {
 ///     eprintln!("Unable to print catalog: {e}");
@@ -380,14 +380,14 @@ fn send_file_metadata(
     // send file name
     match file_path.file_name() {
         Some(f) => {
-            let file_name_packet =packet::encode_packet(f
+            let file_name_packet = packet::encode_packet(f
                 .to_string_lossy()
                 .into_owned()
                 .into_bytes());
             if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet) {
                 return Err(format!("Unable to send file name: {e}"));
             }
-        }
+        },
         None => return Err(format!("Unable to get file name from file path")),
     }
 
@@ -519,9 +519,9 @@ pub async fn start_sender_task(mut stream: TcpStream) {
         Ok(_) => (),
         Err(e) if e.kind() == ErrorKind::UnexpectedEof => return, // indicates ping was sent, so do not continue connection
         Err(e) => {
-            eprintln!("Failed to read peer's public key: {e}");
+            eprintln!("Failed to read peer's public key: {e}"); // if a Windows user pings themselves, this error is printed
             return;
-        }
+        },
     };
 
     // generate and store AES cipher
@@ -543,7 +543,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
         Err(e) => {
             eprintln!("Failed to decrypt ciphertext of mode packet: {e}");
             return;
-        }
+        },
     };
 
     let mode_packet = match packet::decode_packet(mode_packet) {
@@ -551,7 +551,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
         Err(e) => {
             eprintln!("Unable to decode mode packet: {e}");
             return;
-        }
+        },
     };
 
     // split tasks depending on mode sent by requester
@@ -562,23 +562,23 @@ pub async fn start_sender_task(mut stream: TcpStream) {
             } else {
                 println!("Catalog sent to {:?}", stream.peer_addr().unwrap())
             }
-        }
+        },
         Ok(m) if m == "request_file" => {
             if let Err(e) = fulfill_file_request(&mut stream, &mut nonce, &cipher) {
                 eprintln!("Failed to fulfill file request: {e}");
             }
-        }
+        },
         Ok(_) => (),
         Err(e) => {
             eprintln!("Failed to read mode: {e}");
             return;
-        }
+        },
     }
 }
 
 
 
-pub fn start_listening() {
+pub async fn start_listening() {
     // Create and enter a new async runtime
     let runtime = Runtime::new().expect("Failed to create a runtime");
     let _ = runtime.enter();
@@ -589,11 +589,11 @@ pub fn start_listening() {
         Ok(l) => {
             println!("Client listening on {}", &listen_addr);
             l
-        }
+        },
         Err(e) => {
             eprintln!("Failed to bind: {}", e);
             return;
-        }
+        },
     };
     println!("Successfully started listener");
 
@@ -604,7 +604,7 @@ pub fn start_listening() {
             Err(e) => {
                 eprintln!("Failed to accept connection: {e}");
                 continue;
-            }
+            },
         };
 
         // spawn a new task for each incoming stream to handle more than one connection

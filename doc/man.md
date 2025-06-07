@@ -1,5 +1,5 @@
 *Sample progress bar to show while receiving files:*  
-textbook.pdf \[\#\#\#\#\#\#\#\#\#\#\#\#\#\#.............\] 835.6MB/1.8GB (52.4%)
+textbook.pdf \[=====================             \] 835.6MB/1.8GB (52.4%)
 
 *Sample man page for Idea 1:*
 

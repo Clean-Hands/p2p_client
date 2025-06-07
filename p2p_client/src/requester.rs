@@ -1,6 +1,6 @@
 //! requester.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 5th, 2025
+//! June 6th, 2025
 //! CS347 Advanced Software Design
 
 use crate::encryption;
@@ -12,15 +12,14 @@ use aes_gcm::{
 };
 use directories::ProjectDirs;
 use hex;
-use std::env;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use size::Size;
 use std::{
     collections::HashMap,
+    env,
     fs::{self, File},
     io::{self, ErrorKind, Read, Write},
-    net::TcpStream,
-    net::{IpAddr, ToSocketAddrs},
+    net::{IpAddr, SocketAddr, TcpStream},
     path::PathBuf,
     thread::sleep,
     time::{Duration, Instant},
@@ -40,7 +39,7 @@ const SPINNER: &[char] = &['|', '/', '-', '\\'];
 const BAR_WIDTH: usize = 50;
 const UPDATE_DELAY_MS: u64 = 100;
 
-const PING_TIMEOUT: u64 = 1;
+const PING_TIMEOUT: Duration = Duration::from_secs(1);
 
 
 
@@ -76,7 +75,7 @@ pub fn get_deserialized_peer_list() -> Result<PeerMap, String> {
     let peer_list: PeerMap;
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}"))
+        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}")),
     };
 
     if peer_list_path.exists() {
@@ -108,7 +107,7 @@ pub fn get_deserialized_peer_list() -> Result<PeerMap, String> {
 fn write_updated_peer_list(peer_list: &PeerMap) -> Result<(), String> {
     let peer_list_path = match get_peer_list_path() {
         Ok(p) => p,
-        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}"))
+        Err(e) => return Err(format!("Failed to retrieve peer list path: {e}")),
     };
 
     // write updated peer list to peers.json
@@ -134,9 +133,9 @@ fn write_updated_peer_list(peer_list: &PeerMap) -> Result<(), String> {
 
 /// Given an IP and alias for the IP as input, stores them in peers.json
 /// found in a static directory. See get_peer_list_path() for peers.json locations
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust
 /// let alias = String::from("Alice");
 /// let peer_address = String::from("10.123.456.789");
@@ -168,9 +167,9 @@ pub fn add_peer(alias: &String, peer_addr: &String) -> Result<(), String> {
 /// Given an alias as input, removes the associated entry from the peer list
 ///
 /// If the input alias is `DELETE-ALL` then all entries in the catalog will be removed
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust
 /// let peer = String::from("Alice");
 /// if let Err(e) = remove_from_peer_list(&peer) {
@@ -199,7 +198,7 @@ pub fn remove_from_peer_list(alias: &String) -> Result<(), String> {
 
     // write updated catalog to catalog.json
     if let Err(e) = write_updated_peer_list(&peer_list) {
-        return Err(format!("Error writing updated catalog: {e}"))
+        return Err(format!("Error writing updated catalog: {e}"));
     }
 
     Ok(())
@@ -208,9 +207,9 @@ pub fn remove_from_peer_list(alias: &String) -> Result<(), String> {
 
 
 /// Prints the contents of the peer list
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust
 /// if let Err(e) = requester::print_peer_list() {
 ///    eprintln!("Failed to print peer list: {e}");
@@ -280,19 +279,13 @@ pub fn ping_peer(peer: &String) -> Result<String, String> {
     };
     let send_addr = format!("{addr}:7878");
 
-    // We only ever ping 1 IP at a time, so treat the vector as a single item
-    let socket_addr = match send_addr.to_socket_addrs() {
-        Ok(mut addrs) => match addrs.next() {
-            Some(a) => a,
-            None => return Err(format!("Could not resolve address: {send_addr}")),
-        },
+    let socket_addr = match send_addr.parse() {
+        Ok(a) => a,
         Err(e) => return Err(format!("Failed to resolve address {send_addr}: {e}")),
     };
 
     // If the peer does not respond in 1 second, we will return Err
-    let timeout = Duration::from_secs(PING_TIMEOUT);
-
-    match TcpStream::connect_timeout(&socket_addr, timeout) {
+    match TcpStream::connect_timeout(&socket_addr, PING_TIMEOUT) {
         Ok(_) => return Ok(format!("{addr} is online!")),
         Err(_) => return Err(format!("{addr} did not respond to ping in time")),
     }
@@ -341,13 +334,15 @@ fn connect_stream(addr: &String) -> TcpStream {
     // loop until connection is successful
     loop {
         println!("Attempting to connect to {send_addr}...");
-        match TcpStream::connect(&send_addr) {
+
+        let socket_addr: SocketAddr = send_addr.parse().unwrap();
+        match TcpStream::connect_timeout(&socket_addr, PING_TIMEOUT) {
             Ok(s) => {
                 return s;
             }
             Err(e) => {
                 eprintln!("Failed to connect to {send_addr}: {e}");
-                sleep(Duration::from_secs(1));
+                sleep(PING_TIMEOUT);
             }
         };
     }
@@ -355,20 +350,20 @@ fn connect_stream(addr: &String) -> TcpStream {
 
 
 
-/// Requests catalog from an alias associated with a peer's IP in the peer list, or given a 
+/// Requests catalog from an alias associated with a peer's IP in the peer list, or given a
 /// peer's IP address directly, then returns a formatted string of the contents of the catalog
-/// 
+///
 /// ## Return String Format
-/// 
+///
 /// ```
 /// | SHA-256 Hash   | File Name      | Size
 /// |================|================|=======================
 /// | [hash of file] | [name of file] | [formatted file size]
 /// | ...            | ...            | ...
 /// ```
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust
 /// let peer = String::from("Alice");
 /// match request_catalog(&peer) {
@@ -519,7 +514,8 @@ fn await_file_metadata(
         Ok(p) => p,
         Err(e) => return Err(format!("Failed to decode packet: {e}")),
     };
-    let file_size_array: [u8; 8] = file_size_packet.data
+    let file_size_array: [u8; 8] = file_size_packet
+        .data
         .try_into()
         .expect("Vec must have exactly 8 elements");
     let file_size = u64::from_be_bytes(file_size_array);
@@ -693,6 +689,7 @@ fn resolve_peer(peer: &String) -> Result<String, String> {
 }
 
 
+
 /// If the path contains a tilde, this function replaces it with the HOME path. If the path
 /// does not contain a tilde, returns the given path with no changes.
 fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
@@ -715,7 +712,7 @@ fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
                 } else {
                     Ok(path)
                 }
-            },
+            }
             None => Err("Failed to convert path to string".to_string()),
         }
     } else {
@@ -724,12 +721,14 @@ fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
     }
 }
 
+
+
 /// Send a request for a file by its `hash` to the `peer`, saving it in `file_path`.
 ///
 /// `peer` can be an IP or an alias saved in the peer list associated with an IP.
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust
 /// let peer = String::from("Alice");
 /// let hash = String::from("a04be9a1841bd200e6ed9bd431ca71cd176b9779be9f52ef58635bacf10e04fc");
@@ -765,19 +764,23 @@ pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
             return;
         }
     };
-    
+
     // send mode packet
     let req_catalog_packet = packet::encode_packet(String::from("request_file").into_bytes());
     let mut nonce: [u8; 12] = [0; 12];
-    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet) {
+    if let Err(e) =
+        encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet)
+    {
         eprintln!("Failed to send request for sender catalog {e}");
         return;
     }
 
     // send file hash
-    let file_hash_packet = packet::encode_packet(hex::decode(&hash)
-        .expect("Unable to decode hexadecimal string"));
-    if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet) {
+    let file_hash_packet =
+        packet::encode_packet(hex::decode(&hash).expect("Unable to decode hexadecimal string"));
+    if let Err(e) =
+        encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_hash_packet)
+    {
         eprintln!("{e}");
         return;
     }
@@ -790,7 +793,7 @@ pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
 
 
 
-/// These tests assume that a listener is not running on the machine that is running the tests. 
+/// These tests assume that a listener is not running on the machine that is running the tests.
 /// Tests will fail if your local machine is both running a listener and running tests.
 #[cfg(test)]
 mod tests {
@@ -816,10 +819,10 @@ mod tests {
         let map = PeerMap::new();
         let write_result = write_updated_peer_list(&map);
         assert!(write_result.is_ok());
-        
+
         assert!(add_peer(&String::from("alice"), &String::from("10.0.0.1")).is_ok());
         assert!(add_peer(&String::from("bob"), &String::from("10.0.0.2")).is_ok());
-        
+
         // verify add was completed correctly
         let read_result = get_deserialized_peer_list();
         assert!(read_result.is_ok());
@@ -831,7 +834,7 @@ mod tests {
 
         // remove a peer
         assert!(remove_from_peer_list(&String::from("alice")).is_ok());
-        
+
         // check final state is correct
         let final_read = get_deserialized_peer_list().unwrap();
         assert_eq!(final_read.len(), 1);
