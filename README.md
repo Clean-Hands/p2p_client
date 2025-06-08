@@ -28,16 +28,16 @@ The catalog and list of known peers is saved in a static directory whose locatio
 - You can now run the code by running the executable.
 
 ### Run the code
-- Make sure you are still within the `p2p_client` directory.
-- If you want to launch the graphical user interface:
-  - Navigate to the directory that contains the executable (`p2p_client/target/release/p2p_client` by default).
-  - Run `./p2p_client` (Unix) or `.p2p_client` (Windows).
-- If you want to use the command line interface:
-  - Run `./p2p_client -h ` (Unix) or `.p2p_client -h` (Windows) to view the options for the CLI.
-  - More details on the CLI can be found in [running.md](https://github.com/rubenboero21/cs347/blob/main/doc/running.md).
-- You can generate and open local documentation for our app by running `cargo doc --open`.
-- You can run our unit tests with `cargo test`. 
-  - See [testing.md](https://github.com/rubenboero21/cs347/blob/main/doc/testing.md) for more details.
+- Navigate to the directory that contains the executable (`p2p_client/target/release/p2p_client` by default).
+  - If you want to launch the graphical user interface:
+    - Run `./p2p_client` (Unix) or `.p2p_client` (Windows).
+  - If you want to use the command line interface:
+    - Run `./p2p_client -h ` (Unix) or `.p2p_client -h` (Windows) to view the options for the CLI.
+    - More details on the CLI can be found in [running.md](https://github.com/rubenboero21/cs347/blob/main/doc/running.md).
+- From within the `p2p_client` directory:
+  - You can generate and open local documentation for our app by running `cargo doc --open`.
+  - You can run our unit tests with `cargo test`. 
+    - See [testing.md](https://github.com/rubenboero21/cs347/blob/main/doc/testing.md) for more details.
 
 ## Existing Features
 - A graphical user interface can be started by running the `p2p_client` executable. See above Getting Started section for how to build the executable.
