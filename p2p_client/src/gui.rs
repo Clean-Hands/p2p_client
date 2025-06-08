@@ -483,7 +483,7 @@ impl eframe::App for P2PGui {
                     });
 
                     ui.horizontal(|ui| {
-                        if ui.button("Cancel").clicked() {
+                        if ui.button("Close").clicked() {
                             // update catalog to reflect removed files
                             self.catalog = Some(self.new_catalog.clone());
 
