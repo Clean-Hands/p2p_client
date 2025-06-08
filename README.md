@@ -40,7 +40,7 @@ The catalog and list of known peers is saved in a static directory whose locatio
     - See [testing.md](https://github.com/rubenboero21/cs347/blob/main/doc/testing.md) for more details.
 
 ## Existing Features
-- A graphical user interface can be started by running the `p2p_client` executable. See above Getting Started section for how to build the executable.
+- A graphical user interface can be started by running the `p2p_client` executable. See above [Getting Started](https://github.com/rubenboero21/cs347/blob/main/README.md#getting-started) section for how to build the executable.
 - The code is broken into two halves: a **listener** and a **requester**. The listener listens for requests and fulfills them. The requester asks the listener for services. 
 - **Listener features**:
   - The listener can handle multiple requests at once via [rust's asynchronous feature](https://rust-lang.github.io/async-book/).
