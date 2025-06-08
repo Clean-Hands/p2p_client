@@ -215,7 +215,7 @@ impl P2PGui {
                 });
         });
         ui.horizontal(|ui| {
-            if ui.button("Add/Remove Catalog Entries").clicked() {
+            if ui.button("Add/Remove Catalog Files").clicked() {
                 self.new_catalog = match &self.catalog {
                     Some(map) => map.clone(),
                     None => HashMap::new(),
