@@ -11,6 +11,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+use rfd::FileDialog;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 enum AppTab {
@@ -31,6 +32,8 @@ pub struct P2PGui {
     current_tab: AppTab,
     catalog: Option<HashMap<String, listener::FileInfo>>,
     catalog_width: usize,
+    catalog_edit_mode: bool,
+    new_catalog: HashMap<String, listener::FileInfo>
 }
 
 
@@ -211,6 +214,15 @@ impl P2PGui {
                     );
                 });
         });
+        ui.horizontal(|ui| {
+            if ui.button("Add/Remove Catalog Entries").clicked() {
+                self.new_catalog = match &self.catalog {
+                    Some(map) => map.clone(),
+                    None => HashMap::new(),
+                };
+                self.catalog_edit_mode = true;
+            }
+        });
     }
 
 
@@ -244,6 +256,8 @@ impl P2PGui {
             current_tab: AppTab::Request,
             catalog: None,
             catalog_width: 500,
+            catalog_edit_mode: false,
+            new_catalog: HashMap::new(),
         }
     }
 }
@@ -324,7 +338,7 @@ impl eframe::App for P2PGui {
                             .show(ui, |ui| {
                                 if self.peer_vec != vec![] {
                                     for (new_alias, new_addr) in &mut self.new_peer_vec {
-                                        if new_alias.len() != 0 || new_addr.len() != 0 {
+                                        // if new_alias.len() != 0 || new_addr.len() != 0 {
                                             ui.horizontal(|ui| {
                                                 ui.add_sized([150.0, 20.0],
                                                     TextEdit::singleline(new_alias).hint_text("Alias")
@@ -337,7 +351,7 @@ impl eframe::App for P2PGui {
                                                     new_addr.clear();
                                                 }
                                             });
-                                        }
+                                        // }
                                     }
                                 } else {
                                     ui.label("Peer list is empty.");
@@ -346,7 +360,8 @@ impl eframe::App for P2PGui {
                             ui.add_space(5.0);
                             ui.allocate_ui_with_layout(Vec2::new(0.0, 0.0), Layout::left_to_right(Align::Center), |ui| {
                                 if ui.add_sized(Vec2::new(305.0, 0.0), egui::Button::new("+ Add New Peer")).clicked() {
-                                    self.new_peer_vec.push(("New Alias".to_string(), "New IP Address".to_string()));
+                                    // self.new_peer_vec.push(("New Alias".to_string(), "New IP Address".to_string()));
+                                    self.new_peer_vec.push(("".to_string(), "".to_string()));
                                 }
                             });
                     });
@@ -389,6 +404,90 @@ impl eframe::App for P2PGui {
                         if ui.button("Cancel").clicked() {
                             // close the peers window without submitting any changes
                             self.modify_peers = false;
+                        }
+                    });
+                });
+        }
+
+        if self.catalog_edit_mode {
+            egui::Window::new("Edit Catalog")
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.group(|ui| {
+                        egui::ScrollArea::vertical()
+                            .max_height(100.0)
+                            .show(ui, |ui| {
+                                let mut to_remove = Vec::new();
+                                for (hash, info) in self.new_catalog.iter() {
+                                    ui.horizontal(|ui| {
+                                        let total_width = ui.available_width();
+                                        let delete_button_width = 40.0;
+                                        let file_name_width = total_width - delete_button_width - ui.spacing().item_spacing.x;
+
+                                        let file_name = std::path::Path::new(&info.file_path)
+                                            .file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or("");
+
+                                        ui.add_sized(
+                                            [file_name_width, 20.0],
+                                            TextEdit::singleline(&mut file_name.to_string())
+                                                .interactive(false),
+                                        )
+                                        .on_hover_text(&info.file_path);
+
+                                        if ui.button("🗑").clicked() {
+                                            if let Err(e) = listener::remove_file_from_catalog(hash) {
+                                                self.error_string = format!("Error removing from catalog: {e}");
+                                            } else {
+                                                to_remove.push(hash.clone());
+                                            }
+                                        }
+                                    });
+                                }
+                                // remove deleted items from the edit window's version of the catalog
+                                for hash in to_remove {
+                                    self.new_catalog.remove(&hash);
+                                }
+                            });
+
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(0.0, 0.0),
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                if ui.add_sized(Vec2::new(305.0, 0.0), egui::Button::new("+ Add File")).clicked() {
+                                    if let Some(picked_path) = FileDialog::new().pick_file() {
+                                        let path_str = picked_path.to_string_lossy().to_string();
+
+                                        if let Err(e) = listener::add_file_to_catalog(&path_str) {
+                                            self.error_string = format!("Failed to add to catalog: {e}");
+                                        } else {
+                                            // update catalog
+                                            // probably better to do this without needing to re-read the 
+                                            // catalog from disk. would need to manually insert all parts 
+                                            // of the dictionary entry
+                                            if let Some(catalog_path) = listener::get_catalog_path().ok() {
+                                                if let Ok(catalog_map) = listener::get_deserialized_catalog(&catalog_path) {
+                                                    // need to update new catalog as well to show changes 
+                                                    // immediately
+                                                    self.new_catalog = catalog_map;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                            },
+                        );
+                    });
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Cancel").clicked() {
+                            // update catalog to reflect removed files
+                            self.catalog = Some(self.new_catalog.clone());
+
+                            self.catalog_edit_mode = false;
                         }
                     });
                 });

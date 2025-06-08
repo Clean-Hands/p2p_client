@@ -29,7 +29,7 @@ use x25519_dalek::{EphemeralSecret, PublicKey};
 type CatalogMap = HashMap<String, FileInfo>;
 
 // this struct is public because it is used within gui.rs to populate listener information
-#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize, Clone)]
 pub struct FileInfo {
     pub file_path: String,
     pub file_size: u64,
@@ -125,6 +125,21 @@ fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result
 }
 
 
+/// Computes hash of a given file given the file's path. Hash is represented in hexadecimal.
+fn compute_hash(file_path: &PathBuf) -> Result<String, String>{
+    // for large files (> ~100 MB) hashing can take a significant amount of time
+    println!("Computing file hash...");
+
+    // get hash of file
+    let file_bytes = match file_rw::read_file_bytes(&file_path) {
+        Ok(b) => b,
+        Err(e) => return Err(e),
+    };
+    let file_hash = packet::compute_sha256_hash(&file_bytes);
+    let file_hash_string: String = hex::encode(&file_hash);
+
+    Ok(file_hash_string)
+}
 
 /// Given a file path as input, computes hash of the file, then stores the hash and absolute file path in
 /// catalog.json found in a static directory. See get_catalog_path() for catalog directory locations
@@ -155,16 +170,13 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
         }
     };
 
-    // for large files (> ~100 MB) hashing can take a significant amount of time
-    println!("Computing file hash...");
-
     // get hash of file
-    let file_bytes = match file_rw::read_file_bytes(&absolute_file_path) {
-        Ok(b) => b,
-        Err(e) => return Err(e),
+    let file_hash_string = match compute_hash(&absolute_file_path) {
+        Ok(h) => h,
+        Err(e) => {
+            return Err(format!("Failed to compute hash: {e}"));
+        }
     };
-    let file_hash = packet::compute_sha256_hash(&file_bytes);
-    let file_hash_string: String = hex::encode(&file_hash);
 
     // get size of file
     let file_size = match file_rw::get_file_size(&absolute_file_path) {
