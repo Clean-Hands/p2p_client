@@ -346,7 +346,6 @@ impl eframe::App for P2PGui {
                             .show(ui, |ui| {
                                 if self.new_peer_vec != vec![] {
                                     for (new_alias, new_addr) in &mut self.new_peer_vec {
-                                        // if new_alias.len() != 0 || new_addr.len() != 0 {
                                             ui.horizontal(|ui| {
                                                 ui.add_sized([150.0, 20.0],
                                                     TextEdit::singleline(new_alias).hint_text("Alias")
@@ -359,7 +358,6 @@ impl eframe::App for P2PGui {
                                                     new_addr.clear();
                                                 }
                                             });
-                                        // }
                                     }
                                 } else {
                                     ui.label("Peer list is empty.");
@@ -368,7 +366,6 @@ impl eframe::App for P2PGui {
                             ui.add_space(5.0);
                             ui.allocate_ui_with_layout(Vec2::new(0.0, 0.0), Layout::left_to_right(Align::Center), |ui| {
                                 if ui.add_sized(Vec2::new(305.0, 0.0), egui::Button::new("+ Add New Peer")).clicked() {
-                                    // self.new_peer_vec.push(("New Alias".to_string(), "New IP Address".to_string()));
                                     self.new_peer_vec.push(("".to_string(), "".to_string()));
                                 }
                             });
