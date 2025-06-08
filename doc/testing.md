@@ -11,7 +11,7 @@ Tests are present as modules at the bottom of the following files:
 - [packet.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/packet.rs)
 - [encryption.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/encryption.rs)
 - [listener.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/listener.rs)
-- [requester.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/requester.rs).
+- [requester.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/requester.rs)
 
 
 ## Manual Testing
