@@ -7,7 +7,7 @@ A peer-to-peer file-sharing network is a [decentralized network](https://en.wiki
 
 The project idea sprang from wanting to conveniently share large files with peers (ha!) on campus without the hassle of exchanging files physically or through other roundabout means. This use case motivated our tool's core architecture; you locally maintain a list of trusted peers (your friends) and files you want accessible to others. 
 
-Below you will see us discuss a catalog feature and a list of known peers. The point of the catalog is to allow the listener specify exactly which files it is allowed to send and save relevant information about those files. The point of the list of known peers is to allow the user to not need to type in an entire IP address every time. By adding a peer into the list of known peers under an alias, you don't need to remember which IP belongs to someone, you just need to remember the alias you gave the IP.
+Below you will see us discuss a catalog and a list of known peers. The point of the catalog is to allow the listener specify exactly which files it is allowed to send and save relevant information about those files. The point of the list of known peers is to allow the user to not need to type in an entire IP address every time. By adding a peer into the list of known peers under an alias, you don't need to remember which IP belongs to someone, you just need to remember the alias you gave the IP.
 
 The catalog and list of known peers is saved in a static directory whose location is dependent on OS:
 - Linux: `/home/[user]/.local/share/p2p_client`
