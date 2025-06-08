@@ -1,11 +1,19 @@
 //! gui.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 6th, 2025
+//! June 7th, 2025
 //! CS347 Advanced Software Design
 
 use crate::listener;
 use crate::requester;
-use eframe::egui::{self, Align, CentralPanel, Key, Layout, TextEdit, TopBottomPanel, Vec2};
+use eframe::egui::{self,
+    Align,
+    CentralPanel,
+    Key,
+    Layout,
+    RichText,
+    TextEdit,
+    TopBottomPanel,
+    Vec2};
 use size::Size;
 use std::{
     collections::HashMap,
@@ -81,7 +89,7 @@ impl P2PGui {
                     self.file_options = vec![];
                     for mut line in catalog_lines {
                         let hash = line.split_off(2).join("").trim().to_string();
-                        let file_info = line.join("      ").trim().to_string();
+                        let file_info = format!("{:<5}  {}", line[0], line[1]).trim().to_string();
                         self.file_options.push((file_info, hash));
                     }
                 }
@@ -92,12 +100,12 @@ impl P2PGui {
         // Displaying the requested catalog and its available files
         ui.group(|ui| {
             ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
-                egui::ScrollArea::vertical()
-                    .min_scrolled_width(300.0)
+                egui::ScrollArea::both()
+                    .max_height(130.0)
                     .show(ui, |ui| {
                         if self.file_options.len() > 0 {
                             for i in 0..self.file_options.len() {
-                                if ui.button(&self.file_options[i].0).double_clicked() {
+                                if ui.button(RichText::new(&self.file_options[i].0).monospace()).double_clicked() {
                                     requester::request_file(
                                         self.peer.to_owned(),
                                         self.file_options[i].1.to_owned(),
@@ -336,7 +344,7 @@ impl eframe::App for P2PGui {
                         egui::ScrollArea::vertical()
                             .max_height(100.0)
                             .show(ui, |ui| {
-                                if self.peer_vec != vec![] {
+                                if self.new_peer_vec != vec![] {
                                     for (new_alias, new_addr) in &mut self.new_peer_vec {
                                         // if new_alias.len() != 0 || new_addr.len() != 0 {
                                             ui.horizontal(|ui| {
