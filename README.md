@@ -28,7 +28,7 @@ The catalog and list of known peers is saved in a static directory whose locatio
 - You can now run the code by running the executable.
 
 ### Run the code
-- Navigate to the directory that contains the executable (`p2p_client/target/release/p2p_client` by default).
+- Navigate to the directory that contains the executable (`p2p_client/target/release` by default).
   - If you want to launch the graphical user interface:
     - Run `./p2p_client` (Unix) or `.p2p_client` (Windows).
   - If you want to use the command line interface:
@@ -65,7 +65,9 @@ The catalog and list of known peers is saved in a static directory whose locatio
   - The catalog edit window relies on the GUI updating many times a second rather than permanently loading the needed information into the element. This will likely cause issues if the catalog is very large. Refer to lines 419-445 in [gui.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/gui.rs) to see the problematic code.
 - Computing a file hash and sending a file is slow:
   - Unsure if there is a way to make computing a file hash faster (there probably is).
+    - Computing a file hash occurs in `compute_hash()` function within [listener.rs](https://github.com/rubenboero21/cs347/blob/gui/p2p_client/src/listener.rs).
   - There is most likely ways to increase the speed of file sending.
+    - File sending happens in the `fulfill_file_request()` function within [listener.rs](https://github.com/rubenboero21/cs347/blob/gui/p2p_client/src/listener.rs).
 - Our unit tests perform a file transfer across two peer instances on the same device. To make our tests more robust implementing architecture capable of testing *between* device file transfer would be beneficial.
-- Some of our unit tests rely simply on the fact that the called function does not return an error. They could be improved by checking that the returned item is also of the correct form. For example, test_catalog_request() in [requester.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/requester.rs) does not check that the catalog is returned in the correct form. 
+- Some of our unit tests rely simply on the fact that the called function does not return an error. (We think this is passable because we are careful in the way we check for and return errors) They could be improved by checking that the returned item is also of the correct form. For example, `test_catalog_request()` in [requester.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/requester.rs) does not check that the catalog is returned in the correct form. 
 - If a Windows user pings themselves, an error occurs.
