@@ -68,7 +68,8 @@ enum ListenCommand {
     ViewCatalog {},
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
     match cli.mode {
         // parse the request subcommand
@@ -78,7 +79,7 @@ fn main() {
                 file_hash,
                 save_path,
             } => {
-                requester::request_file(peer, file_hash, save_path.unwrap_or(PathBuf::from(".")));
+                requester::request_file(peer, file_hash, save_path.unwrap_or(PathBuf::from("."))).await;
             }
             RequestCommand::Catalog { peer } => match requester::request_catalog(&peer) {
                 Ok(result) => {
@@ -125,7 +126,7 @@ fn main() {
         // parse the listen subcommand
         Some(Mode::Listen { command }) => match command {
             ListenCommand::Start {} => {
-                let _ = async { listener::start_listening().await };
+                listener::start_listening().await;
             }
             ListenCommand::ViewCatalog {} => {
                 if let Err(e) = listener::print_catalog() {
@@ -239,7 +240,9 @@ mod tests {
         // request file
         let address = "127.0.0.1".to_string();
         let rq_file_hash = hex::encode(&file_hash);
-        requester::request_file(address, rq_file_hash.clone(), PathBuf::from("."));
+        let runtime = Runtime::new().expect("Failed to create a runtime");
+        let _ = runtime.enter();
+        runtime.block_on(requester::request_file(address, rq_file_hash.clone(), PathBuf::from(".")));
 
         // validate the received file
         let file_name = dummy_file

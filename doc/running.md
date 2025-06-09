@@ -20,7 +20,7 @@ Ensure you have navigated to the `p2p_client` directory before attempting to run
 5. Request the file (and optionally choose where to save it) with `cargo run request file <IP address> <file hash> [save path]`
 
 ## Available Commands
-This document assumes you are using cargo to build the project. If you would prefer to use the executable, replace `cargo run` with `p2p_client` in the following commands.
+This document assumes you are using cargo to build the project. If you would prefer to use the executable, replace `cargo run` with `p2p_client` (`p2p_client.exe` on Windows) in the following commands.
 ### CLI specific commands:
 - Help command (display information about the app and its commands).
 - This command is the only one that does not work when running the app with cargo. You must run the executable file directly. If you do not run the executable, the cargo's help information will print.

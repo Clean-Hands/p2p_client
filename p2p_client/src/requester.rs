@@ -736,7 +736,7 @@ fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
 /// requester::request_file(peer, hash, file_path);
 /// );
 /// ```
-pub fn request_file(peer: String, hash: String, file_path: PathBuf) {
+pub async fn request_file(peer: String, hash: String, file_path: PathBuf) {
     // replace a ~ with the HOME path if necessary
     let file_path = match resolve_tilde(file_path) {
         Ok(p) => p,
