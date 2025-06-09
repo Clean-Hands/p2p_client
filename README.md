@@ -23,16 +23,16 @@ The catalog and list of known peers is saved in a static directory whose locatio
 ### Build the Code
 - Navigate to the `p2p_client` directory.
 - Build the code for release (optimized):
-  - `cargo build --release`
-  - This creates an executable in `p2p_client/target/release` called `p2p_client`.
+  - `cargo build -r`
+  - This creates an executable in `p2p_client/target/release` called `p2p_client` (`p2p_client.exe` on Windows).
 - You can now run the code by running the executable.
 
 ### Run the Code
 - Navigate to the directory that contains the executable (`p2p_client/target/release` by default).
   - If you want to launch the graphical user interface:
-    - Run `./p2p_client` (Unix) or `.p2p_client` (Windows).
+    - Run `./p2p_client` (Unix) or `.\p2p_client.exe` (Windows).
   - If you want to use the command line interface:
-    - Run `./p2p_client -h ` (Unix) or `.p2p_client -h` (Windows) to view the options for the CLI.
+    - Run `./p2p_client -h ` (Unix) or `.\p2p_client.exe -h` (Windows) to view the options for the CLI.
     - More details on the CLI can be found in [running.md](https://github.com/rubenboero21/cs347/blob/main/doc/running.md).
 - From within the `p2p_client` directory:
   - You can generate and open local documentation for our app by running `cargo doc --open`.
