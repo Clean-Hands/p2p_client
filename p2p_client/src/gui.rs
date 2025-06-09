@@ -1,25 +1,29 @@
 //! gui.rs
 //! by Lazuli Kleinhans, Liam Keane, Ruben Boero
-//! June 7th, 2025
+//! June 8th, 2025
 //! CS347 Advanced Software Design
 
 use crate::listener;
 use crate::requester;
 use eframe::egui::{self,
     Align,
+    Button,
     CentralPanel,
     Key,
     Layout,
     RichText,
+    ScrollArea,
     TextEdit,
     TopBottomPanel,
-    Vec2};
+    Vec2,
+    Window,
+};
+use rfd::FileDialog;
 use size::Size;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use rfd::FileDialog;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 enum AppTab {
@@ -100,7 +104,7 @@ impl P2PGui {
         // Displaying the requested catalog and its available files
         ui.group(|ui| {
             ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
-                egui::ScrollArea::both()
+                ScrollArea::both()
                     .max_height(130.0)
                     .show(ui, |ui| {
                         if self.file_options.len() > 0 {
@@ -138,10 +142,6 @@ impl P2PGui {
                 self.new_peer_vec = self.peer_vec.clone();
                 self.modify_peers = true;
             }
-
-            // if ui.button("Reset GUI").clicked() {
-            //     *self = P2PGui::default();
-            // }
         });
     }
 
@@ -151,7 +151,7 @@ impl P2PGui {
         ui.heading("Local Catalog:");
         ui.separator();
         ui.group(|ui| {
-            egui::ScrollArea::both()
+            ScrollArea::both()
                 .min_scrolled_width(350.0)
                 .show(ui, |ui| {
                     ui.allocate_ui_with_layout(
@@ -320,7 +320,7 @@ impl eframe::App for P2PGui {
         });
 
         if self.error_string != String::new() {
-            egui::Window::new("Error")
+            Window::new("Error")
                 .collapsible(false)
                 .resizable(false)
                 .show(ctx, |ui| {
@@ -336,12 +336,12 @@ impl eframe::App for P2PGui {
 
         // Modify peer dialog window
         if self.modify_peers {
-            egui::Window::new("Known Peers")
+            Window::new("Known Peers")
                 .collapsible(false)
                 .resizable(false)
                 .show(ctx, |ui| {
                     ui.group(|ui| {
-                        egui::ScrollArea::vertical()
+                        ScrollArea::vertical()
                             .max_height(100.0)
                             .show(ui, |ui| {
                                 if self.new_peer_vec != vec![] {
@@ -365,7 +365,7 @@ impl eframe::App for P2PGui {
                             });
                             ui.add_space(5.0);
                             ui.allocate_ui_with_layout(Vec2::new(0.0, 0.0), Layout::left_to_right(Align::Center), |ui| {
-                                if ui.add_sized(Vec2::new(305.0, 0.0), egui::Button::new("+ Add New Peer")).clicked() {
+                                if ui.add_sized(Vec2::new(305.0, 0.0), Button::new("+ Add New Peer")).clicked() {
                                     self.new_peer_vec.push(("".to_string(), "".to_string()));
                                 }
                             });
@@ -415,12 +415,12 @@ impl eframe::App for P2PGui {
         }
 
         if self.catalog_edit_mode {
-            egui::Window::new("Edit Catalog")
+            Window::new("Edit Catalog")
                 .collapsible(false)
                 .resizable(false)
                 .show(ctx, |ui| {
                     ui.group(|ui| {
-                        egui::ScrollArea::vertical()
+                        ScrollArea::vertical()
                             .max_height(100.0)
                             .show(ui, |ui| {
                                 let mut to_remove = Vec::new();
@@ -430,7 +430,7 @@ impl eframe::App for P2PGui {
                                         let delete_button_width = 40.0;
                                         let file_name_width = total_width - delete_button_width - ui.spacing().item_spacing.x;
 
-                                        let file_name = std::path::Path::new(&info.file_path)
+                                        let file_name = Path::new(&info.file_path)
                                             .file_name()
                                             .and_then(|n| n.to_str())
                                             .unwrap_or("");
@@ -461,7 +461,7 @@ impl eframe::App for P2PGui {
                             Vec2::new(0.0, 0.0),
                             Layout::left_to_right(Align::Center),
                             |ui| {
-                                if ui.add_sized(Vec2::new(305.0, 0.0), egui::Button::new("+ Add File")).clicked() {
+                                if ui.add_sized(Vec2::new(305.0, 0.0), Button::new("+ Add File")).clicked() {
                                     if let Some(picked_path) = FileDialog::new().pick_file() {
                                         let path_str = picked_path.to_string_lossy().to_string();
 
