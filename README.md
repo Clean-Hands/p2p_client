@@ -59,9 +59,11 @@ The catalog and list of known peers is saved in a static directory whose locatio
   - View your list of known peers.
 
 ## Future Improvements / Known Issues
-- We have a bare-bones graphical user interface working, but it could be made better in the following ways:
+- We have a bare-bones graphical user interface (GUI) working, but it could be made better in the following ways:
   - Built in instructions for how to use the app.
   - Sizing and spacing of elements could be more polished.
+  - Because many functions are not called asynchronously, the GUI freezes up **extremely frequently** when something is being processed in the background.
+    - To fix this, we could call all functions asynchronously, and then display some progress bar or status information on the GUI itself to let the user know that it is working on their request.
 - Computing a file hash is slow:
   - Unsure if there is a way to make computing a file hash faster (there probably is).
     - Computing a file hash occurs in `compute_hash()` function within [listener.rs](https://github.com/rubenboero21/cs347/blob/gui/p2p_client/src/listener.rs).
