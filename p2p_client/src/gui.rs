@@ -20,6 +20,7 @@ use eframe::egui::{self,
 };
 use rfd::FileDialog;
 use size::Size;
+use tokio::runtime::Runtime;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -32,8 +33,8 @@ enum AppTab {
     Listen,
 }
 
-#[derive(Default)]
 pub struct P2PGui {
+    runtime: Runtime,
     error_string: String,
     peer: String,
     save_path: String,
@@ -110,11 +111,11 @@ impl P2PGui {
                         if self.file_options.len() > 0 {
                             for i in 0..self.file_options.len() {
                                 if ui.button(RichText::new(&self.file_options[i].0).monospace()).double_clicked() {
-                                    requester::request_file(
+                                    self.runtime.spawn(requester::request_file(
                                         self.peer.to_owned(),
                                         self.file_options[i].1.to_owned(),
                                         PathBuf::from(&self.save_path),
-                                    );
+                                    ));
                                 }
                             }
                         } else {
@@ -242,13 +243,18 @@ impl P2PGui {
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
 
-        Self::default()
+        // Set up async runtime
+        let runtime = Runtime::new().expect("Failed to create a runtime");
+        let _ = runtime.enter();
+
+        Self::default(runtime)
     }
 
 
 
-    fn default() -> Self {
+    fn default(runtime: Runtime) -> Self {
         Self {
+            runtime: runtime,
             error_string: String::new(),
             peer: String::new(),
             save_path: String::from(
@@ -318,7 +324,8 @@ impl eframe::App for P2PGui {
             AppTab::Request => self.show_request_tab(ui),
             AppTab::Listen => self.show_listen_tab(ui),
         });
-
+        
+        // Error popup
         if self.error_string != String::new() {
             Window::new("Error")
                 .collapsible(false)
@@ -328,7 +335,7 @@ impl eframe::App for P2PGui {
                     ui.add_space(10.0);
                     ui.label(&self.error_string);
                     ui.add_space(10.0);
-                    if ui.button("aw dang it").clicked() {
+                    if ui.button("🎰 aw dang it 🎰").clicked() {
                         self.error_string = String::new();
                     }
                 });

@@ -64,6 +64,7 @@ The catalog and list of known peers is saved in a static directory whose locatio
   - Sizing and spacing of elements could be more polished.
   - Because many functions are not called asynchronously, the GUI freezes up **extremely frequently** when something is being processed in the background.
     - To fix this, we could call all functions asynchronously, and then display some progress bar or status information on the GUI itself to let the user know that it is working on their request.
+    - We were able to fix it with some functions (e.g. downloading files) but it breaks the output formatting.
 - Computing a file hash is slow:
   - Unsure if there is a way to make computing a file hash faster (there probably is).
     - Computing a file hash occurs in `compute_hash()` function within [listener.rs](https://github.com/rubenboero21/cs347/blob/gui/p2p_client/src/listener.rs).
