@@ -34,7 +34,7 @@ enum AppTab {
 }
 
 pub struct P2PGui {
-    runtime: Runtime,
+    runtime: Option<Runtime>, // Use Option to allow taking ownership in on_exit
     error_string: String,
     peer: String,
     save_path: String,
@@ -111,7 +111,8 @@ impl P2PGui {
                         if self.file_options.len() > 0 {
                             for i in 0..self.file_options.len() {
                                 if ui.button(RichText::new(&self.file_options[i].0).monospace()).double_clicked() {
-                                    self.runtime.spawn(requester::request_file(
+                                    // Safe to unwrap here since we check in update() that runtime exists
+                                    self.runtime.as_ref().unwrap().spawn(requester::request_file(
                                         self.peer.to_owned(),
                                         self.file_options[i].1.to_owned(),
                                         PathBuf::from(&self.save_path),
@@ -247,14 +248,8 @@ impl P2PGui {
         let runtime = Runtime::new().expect("Failed to create a runtime");
         let _ = runtime.enter();
 
-        Self::default(runtime)
-    }
-
-
-
-    fn default(runtime: Runtime) -> Self {
         Self {
-            runtime: runtime,
+            runtime: Some(runtime),
             error_string: String::new(),
             peer: String::new(),
             save_path: String::from(
@@ -280,6 +275,11 @@ impl P2PGui {
 
 impl eframe::App for P2PGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Early return if runtime is None (shouldn't happen in normal usage)
+        if self.runtime.is_none() {
+            return;
+        }
+
         let previous_tab = self.current_tab;
 
         // Top panel for navigation tabs
@@ -380,7 +380,6 @@ impl eframe::App for P2PGui {
                     ui.horizontal(|ui| {
                         if ui.button("Save").clicked() {
                             for i in 0..self.new_peer_vec.len() {
-
                                 let (new_alias, new_addr) = &self.new_peer_vec[i];
                                 // if a peer was added, add new peer to local peer list
                                 if i >= self.peer_vec.len() {
@@ -489,7 +488,6 @@ impl eframe::App for P2PGui {
                                         }
                                     }
                                 }
-
                             },
                         );
                     });
@@ -498,11 +496,18 @@ impl eframe::App for P2PGui {
                         if ui.button("Close").clicked() {
                             // update catalog to reflect removed files
                             self.catalog = Some(self.new_catalog.clone());
-
                             self.catalog_edit_mode = false;
                         }
                     });
                 });
+        }
+    }
+    
+    
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        // When the user closes the GUI, gracefully shutdown the runtime
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_background();
         }
     }
 }

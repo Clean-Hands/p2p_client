@@ -154,6 +154,8 @@ async fn main() {
             // start listening as soon as gui is started
             let runtime = Runtime::new().expect("Failed to create a runtime");
             let _ = runtime.enter();
+            // TODO: gracefully exit this runtime when the GUI closes so we don't have the "Failed to accept connection:" error
+            // Probably send some signal to tell it to wrap up listening before killing the runtime
             runtime.spawn(listener::start_listening());
             
             eframe::run_native(
