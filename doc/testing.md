@@ -3,15 +3,15 @@
 ## Automated Unit Testing
 We are using the [Rust unit test functionality](https://doc.rust-lang.org/book/ch11-00-testing.html) managed by cargo. 
 
-**To run the tests**, run `cargo test` within the [p2p_client](https://github.com/rubenboero21/cs347/tree/main/p2p_client) directory. If you do not have cargo installed, you can get it [here](https://www.rust-lang.org/tools/install). Before running the tests, all local listener processes should be terminated. Some of these tests begin their own listener processes, so if a listener process is already running, conflicts occur.
+**To run the tests**, run `cargo test` within the `p2p_client` directory. If you do not have cargo installed, you can get it [here](https://www.rust-lang.org/tools/install). Before running the tests, all local listener processes should be terminated. Some of these tests begin their own listener processes, so if a listener process is already running, conflicts occur.
 
 Tests are present as modules at the bottom of the following files: 
-- [main.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/main.rs)
-- [file_rw.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/file_rw.rs)
-- [packet.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/packet.rs)
-- [encryption.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/encryption.rs)
-- [listener.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/listener.rs)
-- [requester.rs](https://github.com/rubenboero21/cs347/blob/main/p2p_client/src/requester.rs)
+- [main.rs](https://github.com/Clean-Hands/p2p_client/blob/main/src/main.rs)
+- [file_rw.rs](https://github.com/Clean-Hands/p2p_client/blob/main/src/file_rw.rs)
+- [packet.rs](https://github.com/Clean-Hands/p2p_client/blob/main/src/packet.rs)
+- [encryption.rs](https://github.com/Clean-Hands/p2p_client/blob/main/src/encryption.rs)
+- [listener.rs](https://github.com/Clean-Hands/p2p_client/blob/main/src/listener.rs)
+- [requester.rs](https://github.com/Clean-Hands/p2p_client/blob/main/src/requester.rs)
 
 
 ## Manual Testing
