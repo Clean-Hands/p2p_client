@@ -47,6 +47,11 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 		return Err(format!("Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\""));
 	}
 
+	// data_length counts its own 2 bytes, so anything smaller would underflow the subtraction below
+	if data_len < mem::size_of::<u16>() as u16 {
+		return Err(format!("Data length of \"{data_len}\" is smaller than the minimum of \"{}\"", mem::size_of::<u16>()));
+	}
+
 	packet.data_length = data_len;
 	offset += mem::size_of::<u16>();
 
