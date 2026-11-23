@@ -9,6 +9,7 @@ use eframe::egui::{self,
     Align,
     Button,
     CentralPanel,
+    Frame,
     Key,
     Layout,
     RichText,
@@ -66,47 +67,76 @@ impl P2PGui {
         ui.add_space(5.0);
         ui.horizontal(|ui| {
             ui.label("Peer:");
-            let peer_input = ui.add(
-                TextEdit::singleline(&mut self.peer)
-                    .desired_width(227.0) // set width to line up Request Catalog button with edge of window
-                    .hint_text("Enter peer alias or IP"),
-            );
-            let enter_pressed = ui.ctx().input(|i| i.key_pressed(Key::Enter)) && peer_input.lost_focus();
+            // right-to-left keeps the button pinned to the right edge while the text box fills the rest
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let request_clicked = ui.button("Request Catalog").clicked();
+                let peer_input = ui.add(
+                    TextEdit::singleline(&mut self.peer)
+                        .desired_width(f32::INFINITY)
+                        .hint_text("Enter peer alias or IP"),
+                );
+                let enter_pressed = ui.ctx().input(|i| i.key_pressed(Key::Enter)) && peer_input.lost_focus();
 
-            if enter_pressed || ui.button("Request Catalog").clicked() {                
-                if let Err(e) = requester::ping_peer(&self.peer) {
-                    self.error_string = e;
-                } else {
-                    let catalog_string = match requester::request_catalog(&self.peer) {
+                if enter_pressed || request_clicked {
+                    if let Err(e) = requester::ping_peer(&self.peer) {
+                        self.error_string = e;
+                    } else {
+                        let catalog_string = match requester::request_catalog(&self.peer) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                self.error_string = e;
+                                String::new()
+                            }
+                        };
+
+                        let catalog_lines: Vec<Vec<&str>> = catalog_string
+                            .lines()
+                            .filter(|line| line.contains('.'))
+                            .map(|line| line.split('|').rev().collect::<Vec<&str>>())
+                            .collect();
+
+                        self.file_options = vec![];
+                        for mut line in catalog_lines {
+                            let hash = line.split_off(2).join("").trim().to_string();
+                            let file_info = format!("{:<5}  {}", line[0], line[1]).trim().to_string();
+                            self.file_options.push((file_info, hash));
+                        }
+                    }
+                }
+            });
+        });
+        ui.add_space(5.0);
+
+        // Anchor the peers button to the bottom so the catalog below can fill the remaining height
+        TopBottomPanel::bottom("request_bottom_bar")
+            .frame(Frame::NONE)
+            .show_separator_line(false)
+            .show_inside(ui, |ui| {
+                ui.add_space(5.0);
+                if ui.button("Add/Remove Peers").clicked() {
+                    self.peer_vec = vec![];
+                    let peer_hashmap = match requester::get_deserialized_peer_list() {
                         Ok(c) => c,
                         Err(e) => {
                             self.error_string = e;
-                            String::new()
+                            HashMap::new()
                         }
                     };
 
-                    let catalog_lines: Vec<Vec<&str>> = catalog_string
-                        .lines()
-                        .filter(|line| line.contains('.'))
-                        .map(|line| line.split('|').rev().collect::<Vec<&str>>())
-                        .collect();
-
-                    self.file_options = vec![];
-                    for mut line in catalog_lines {
-                        let hash = line.split_off(2).join("").trim().to_string();
-                        let file_info = format!("{:<5}  {}", line[0], line[1]).trim().to_string();
-                        self.file_options.push((file_info, hash));
+                    for peer in peer_hashmap {
+                        self.peer_vec.push(peer.to_owned());
                     }
+                    self.new_peer_vec = self.peer_vec.clone();
+                    self.modify_peers = true;
                 }
-            }
-        });
-        ui.add_space(5.0);
+            });
 
         // Displaying the requested catalog and its available files
         ui.group(|ui| {
             ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
                 ScrollArea::both()
-                    .max_height(130.0)
+                    .auto_shrink([false, false])
+                    .min_scrolled_height(0.0) // default 64px minimum overflows beneath the bottom button in short windows
                     .show(ui, |ui| {
                         if self.file_options.len() > 0 {
                             for i in 0..self.file_options.len() {
@@ -125,26 +155,6 @@ impl P2PGui {
                     });
             });
         });
-        ui.add_space(5.0);
-
-        ui.horizontal(|ui| {
-            if ui.button("Add/Remove Peers").clicked() {
-                self.peer_vec = vec![];
-                let peer_hashmap = match requester::get_deserialized_peer_list() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        self.error_string = e;
-                        HashMap::new()
-                    }
-                };
-
-                for peer in peer_hashmap {
-                    self.peer_vec.push(peer.to_owned());
-                }
-                self.new_peer_vec = self.peer_vec.clone();
-                self.modify_peers = true;
-            }
-        });
     }
 
 
@@ -152,9 +162,26 @@ impl P2PGui {
     fn show_listen_tab(&mut self, ui: &mut egui::Ui) {
         ui.heading("Local Catalog:");
         ui.separator();
+
+        // Anchor the edit button to the bottom so the catalog below can fill the remaining height
+        TopBottomPanel::bottom("listen_bottom_bar")
+            .frame(Frame::NONE)
+            .show_separator_line(false)
+            .show_inside(ui, |ui| {
+                ui.add_space(5.0);
+                if ui.button("Add/Remove Catalog Files").clicked() {
+                    self.new_catalog = match &self.catalog {
+                        Some(map) => map.clone(),
+                        None => HashMap::new(),
+                    };
+                    self.catalog_edit_mode = true;
+                }
+            });
+
         ui.group(|ui| {
             ScrollArea::both()
-                .min_scrolled_width(350.0)
+                .auto_shrink([false, false])
+                .min_scrolled_height(0.0) // default 64px minimum overflows beneath the bottom button in short windows
                 .show(ui, |ui| {
                     ui.allocate_ui_with_layout(
                         Vec2::new(self.catalog_width as f32, 0.0), // fixed width, auto height
@@ -223,15 +250,6 @@ impl P2PGui {
                         },
                     );
                 });
-        });
-        ui.horizontal(|ui| {
-            if ui.button("Add/Remove Catalog Files").clicked() {
-                self.new_catalog = match &self.catalog {
-                    Some(map) => map.clone(),
-                    None => HashMap::new(),
-                };
-                self.catalog_edit_mode = true;
-            }
         });
     }
 
@@ -324,7 +342,7 @@ impl eframe::App for P2PGui {
             AppTab::Request => self.show_request_tab(ui),
             AppTab::Listen => self.show_listen_tab(ui),
         });
-        
+
         // Error popup
         if self.error_string != String::new() {
             Window::new("Error")
@@ -345,19 +363,84 @@ impl eframe::App for P2PGui {
         if self.modify_peers {
             Window::new("Known Peers")
                 .collapsible(false)
-                .resizable(false)
+                .resizable(true)
+                .default_size([320.0, 200.0])
+                .min_size([250.0, 80.0])
                 .show(ctx, |ui| {
+                    // Anchor Save/Cancel to the bottom of the window so the peer list cannot push them out of view
+                    TopBottomPanel::bottom("save_known_peers")
+                        .frame(Frame::NONE)
+                        .show_separator_line(false)
+                        .show_inside(ui, |ui| {
+                            ui.add_space(5.0);
+                            ui.horizontal(|ui| {
+                                if ui.button("Save").clicked() {
+                                    for i in 0..self.new_peer_vec.len() {
+                                        let (new_alias, new_addr) = &self.new_peer_vec[i];
+                                        // if a peer was added, add new peer to local peer list
+                                        if i >= self.peer_vec.len() {
+                                            if new_alias.len() > 0 && new_addr.len() > 0 {
+                                                if let Err(e) = requester::add_peer(&new_alias, &new_addr) {
+                                                    self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
+                                                }
+                                            }
+                                            continue;
+                                        }
+
+                                        let (alias, addr) = &self.peer_vec[i];
+                                        // if a peer was deleted, remove peer from local peer list
+                                        if new_alias.len() == 0 && new_addr.len() == 0 {
+                                            if let Err(e) = requester::remove_from_peer_list(&alias) {
+                                                self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
+                                            }
+                                            continue;
+                                        }
+
+                                        // if a peer was modified, update the local peer list
+                                        if alias != new_alias || addr != new_addr {
+                                            if let Err(e) = requester::remove_from_peer_list(&alias) {
+                                                self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
+                                            }
+                                            if let Err(e) = requester::add_peer(&new_alias, &new_addr) {
+                                                self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
+                                            }
+                                        }
+                                    }
+                                    self.modify_peers = false;
+                                }
+                                if ui.button("Cancel").clicked() {
+                                    // close the peers window without submitting any changes
+                                    self.modify_peers = false;
+                                }
+                            });
+                        });
+
                     ui.group(|ui| {
+                        // Anchor the add button to the bottom of the group so the peer list cannot push it out of the window
+                        TopBottomPanel::bottom("add_peer_known_peers")
+                            .frame(Frame::NONE)
+                            .show_separator_line(false)
+                            .show_inside(ui, |ui| {
+                                ui.add_space(5.0);
+                                if ui.add_sized(Vec2::new(ui.available_width(), 0.0), Button::new("+ Add New Peer")).clicked() {
+                                    self.new_peer_vec.push(("".to_string(), "".to_string()));
+                                }
+                            });
+
                         ScrollArea::vertical()
-                            .max_height(100.0)
+                            .min_scrolled_height(0.0)
+                            .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 if self.new_peer_vec != vec![] {
                                     for (new_alias, new_addr) in &mut self.new_peer_vec {
                                             ui.horizontal(|ui| {
-                                                ui.add_sized([150.0, 20.0],
+                                                // split the row between the two fields in a 150:120 ratio, leaving room for the delete button
+                                                let delete_button_width = 20.0;
+                                                let fields_width = ui.available_width() - delete_button_width - ui.spacing().item_spacing.x * 2.0;
+                                                ui.add_sized([fields_width * 0.5, 20.0],
                                                     TextEdit::singleline(new_alias).hint_text("Alias")
                                                 );
-                                                ui.add_sized([120.0, 20.0],
+                                                ui.add_sized([fields_width * 0.5, 20.0],
                                                     TextEdit::singleline(new_addr).hint_text("IP Address")
                                                 );
                                                 if ui.button("🗑").clicked() {
@@ -370,52 +453,6 @@ impl eframe::App for P2PGui {
                                     ui.label("Peer list is empty.");
                                 }
                             });
-                            ui.add_space(5.0);
-                            ui.allocate_ui_with_layout(Vec2::new(0.0, 0.0), Layout::left_to_right(Align::Center), |ui| {
-                                if ui.add_sized(Vec2::new(305.0, 0.0), Button::new("+ Add New Peer")).clicked() {
-                                    self.new_peer_vec.push(("".to_string(), "".to_string()));
-                                }
-                            });
-                    });
-                    ui.horizontal(|ui| {
-                        if ui.button("Save").clicked() {
-                            for i in 0..self.new_peer_vec.len() {
-                                let (new_alias, new_addr) = &self.new_peer_vec[i];
-                                // if a peer was added, add new peer to local peer list
-                                if i >= self.peer_vec.len() {
-                                    if new_alias.len() > 0 && new_addr.len() > 0 {
-                                        if let Err(e) = requester::add_peer(&new_alias, &new_addr) {
-                                            self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
-                                        }
-                                    }
-                                    continue;
-                                }
-
-                                let (alias, addr) = &self.peer_vec[i];
-                                // if a peer was deleted, remove peer from local peer list
-                                if new_alias.len() == 0 && new_addr.len() == 0 {
-                                    if let Err(e) = requester::remove_from_peer_list(&alias) {
-                                        self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
-                                    }
-                                    continue;
-                                }
-
-                                // if a peer was modified, update the local peer list
-                                if alias != new_alias || addr != new_addr {
-                                    if let Err(e) = requester::remove_from_peer_list(&alias) {
-                                        self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
-                                    }
-                                    if let Err(e) = requester::add_peer(&new_alias, &new_addr) {
-                                        self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
-                                    }
-                                }
-                            }
-                            self.modify_peers = false;
-                        }
-                        if ui.button("Cancel").clicked() {
-                            // close the peers window without submitting any changes
-                            self.modify_peers = false;
-                        }
                     });
                 });
         }
@@ -423,17 +460,61 @@ impl eframe::App for P2PGui {
         if self.catalog_edit_mode {
             Window::new("Edit Catalog")
                 .collapsible(false)
-                .resizable(false)
+                .resizable(true)
+                .default_size([300.0, 200.0])
+                .min_size([100.0, 120.0])
                 .show(ctx, |ui| {
+
+                    TopBottomPanel::bottom("close_edit_catalog")
+                        .frame(Frame::NONE)
+                        .show_separator_line(false)
+                        .show_inside(ui, |ui| {
+                            ui.add_space(5.0);
+                            if ui.button("Close").clicked() {
+                                // update catalog to reflect removed files
+                                self.catalog = Some(self.new_catalog.clone());
+                                self.catalog_edit_mode = false;
+                            }
+                    });
+
                     ui.group(|ui| {
+                        // Anchor the add button to the bottom of the group so the file list cannot push it out of the window
+                        TopBottomPanel::bottom("add_file_edit_catalog")
+                            .frame(Frame::NONE)
+                            .show_separator_line(false)
+                            .show_inside(ui, |ui| {
+                                ui.add_space(5.0);
+                                if ui.add_sized(Vec2::new(ui.available_width(), 0.0), Button::new("+ Add File")).clicked() {
+                                    if let Some(picked_path) = FileDialog::new().pick_file() {
+                                        let path_str = picked_path.to_string_lossy().to_string();
+
+                                        if let Err(e) = listener::add_file_to_catalog(&path_str) {
+                                            self.error_string = format!("Failed to add to catalog: {e}");
+                                        } else {
+                                            // update catalog
+                                            // probably better to do this without needing to re-read the
+                                            // catalog from disk. would need to manually insert all parts
+                                            // of the dictionary entry
+                                            if let Some(catalog_path) = listener::get_catalog_path().ok() {
+                                                if let Ok(catalog_map) = listener::get_deserialized_catalog(&catalog_path) {
+                                                    // need to update new catalog as well to show changes
+                                                    // immediately
+                                                    self.new_catalog = catalog_map;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+
                         ScrollArea::vertical()
-                            .max_height(100.0)
+                            .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 let mut to_remove = Vec::new();
                                 for (hash, info) in self.new_catalog.iter() {
                                     ui.horizontal(|ui| {
                                         let total_width = ui.available_width();
-                                        let delete_button_width = 40.0;
+                                        let delete_button_width = 20.0;
                                         let file_name_width = total_width - delete_button_width - ui.spacing().item_spacing.x;
 
                                         let file_name = Path::new(&info.file_path)
@@ -462,48 +543,12 @@ impl eframe::App for P2PGui {
                                     self.new_catalog.remove(&hash);
                                 }
                             });
-
-                        ui.allocate_ui_with_layout(
-                            Vec2::new(0.0, 0.0),
-                            Layout::left_to_right(Align::Center),
-                            |ui| {
-                                if ui.add_sized(Vec2::new(305.0, 0.0), Button::new("+ Add File")).clicked() {
-                                    if let Some(picked_path) = FileDialog::new().pick_file() {
-                                        let path_str = picked_path.to_string_lossy().to_string();
-
-                                        if let Err(e) = listener::add_file_to_catalog(&path_str) {
-                                            self.error_string = format!("Failed to add to catalog: {e}");
-                                        } else {
-                                            // update catalog
-                                            // probably better to do this without needing to re-read the 
-                                            // catalog from disk. would need to manually insert all parts 
-                                            // of the dictionary entry
-                                            if let Some(catalog_path) = listener::get_catalog_path().ok() {
-                                                if let Ok(catalog_map) = listener::get_deserialized_catalog(&catalog_path) {
-                                                    // need to update new catalog as well to show changes 
-                                                    // immediately
-                                                    self.new_catalog = catalog_map;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                        );
-                    });
-
-                    ui.horizontal(|ui| {
-                        if ui.button("Close").clicked() {
-                            // update catalog to reflect removed files
-                            self.catalog = Some(self.new_catalog.clone());
-                            self.catalog_edit_mode = false;
-                        }
                     });
                 });
         }
     }
-    
-    
+
+
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         // When the user closes the GUI, gracefully shutdown the runtime
         if let Some(runtime) = self.runtime.take() {

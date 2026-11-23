@@ -157,14 +157,14 @@ async fn main() {
             // TODO: gracefully exit this runtime when the GUI closes so we don't have the "Failed to accept connection:" error
             // Probably send some signal to tell it to wrap up listening before killing the runtime
             runtime.spawn(listener::start_listening());
-            
+
             eframe::run_native(
                 "P2P Client GUI",
                 eframe::NativeOptions {
                     viewport: ViewportBuilder::default()
-                        .with_inner_size([400.0, 300.0]) // Set window size
-                        .with_resizable(false)
-                        .with_maximize_button(false), 
+                        .with_inner_size([500.0, 300.0]) // Set initial window size
+                        .with_min_inner_size([300.0, 200.0]) // Prevent shrinking below the size the layout was designed for
+                        .with_resizable(true),
                     ..Default::default() // Set all options other than `viewport` to their defaults
                 },
                 Box::new(|cc| Ok(Box::new(gui::P2PGui::new(cc)))),
