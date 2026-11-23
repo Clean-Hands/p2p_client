@@ -16,15 +16,15 @@ pub const PACKET_SIZE: usize = 1024 * 16; // 16KB
 /// `data_length`: the sum of all bytes in packet EXCEPT padding bytes
 #[derive(Default, Debug, PartialEq)]
 pub struct Packet {
-    pub data_length: u16,
-    pub data: Vec<u8>, // up to PACKET_SIZE-2 bytes
+	pub data_length: u16,
+	pub data: Vec<u8>, // up to PACKET_SIZE-2 bytes
 }
 
 
 
 /// Given a vector of bytes, compute and return the sha256 hash
 pub fn compute_sha256_hash(data: &Vec<u8>) -> Vec<u8> {
-    return Sha256::digest(data).to_vec();
+	return Sha256::digest(data).to_vec();
 }
 
 
@@ -34,27 +34,27 @@ pub fn compute_sha256_hash(data: &Vec<u8>) -> Vec<u8> {
 /// Returns `Result` type that contains `Err` if the chunk hash verification fails
 /// If it succeeds in decoding the packet, returns `Ok` with the created `Packet` struct
 pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> {
-    let mut packet: Packet = Packet {
-        ..Default::default()
-    };
-    let mut offset = 0;
+	let mut packet: Packet = Packet {
+		..Default::default()
+	};
+	let mut offset = 0;
 
-    // convert data length bytes into u16
-    let data_len = BigEndian::read_u16(&packet_bytes[offset..offset + mem::size_of::<u16>()]);
+	// convert data length bytes into u16
+	let data_len = BigEndian::read_u16(&packet_bytes[offset..offset + mem::size_of::<u16>()]);
 
-    // check for malformed packet
-    if data_len > PACKET_SIZE as u16 {
-        return Err(format!("Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\""));
-    }
+	// check for malformed packet
+	if data_len > PACKET_SIZE as u16 {
+		return Err(format!("Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\""));
+	}
 
-    packet.data_length = data_len;
-    offset += mem::size_of::<u16>();
+	packet.data_length = data_len;
+	offset += mem::size_of::<u16>();
 
-    // add file data
-    let file_data_len = data_len - mem::size_of::<u16>() as u16;
-    packet.data = packet_bytes[offset..offset + file_data_len as usize].to_vec();
+	// add file data
+	let file_data_len = data_len - mem::size_of::<u16>() as u16;
+	packet.data = packet_bytes[offset..offset + file_data_len as usize].to_vec();
 
-    Ok(packet)
+	Ok(packet)
 }
 
 
@@ -65,22 +65,22 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 ///
 /// Output: a properly formatted array of bytes to send
 pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
-    let mut packet = [0u8; PACKET_SIZE];
-    let mut offset = 0;
+	let mut packet = [0u8; PACKET_SIZE];
+	let mut offset = 0;
 
-    // append data length
-    let data_length: u16 = (mem::size_of::<u16>() + data.len()) as u16;
-    if data_length > PACKET_SIZE as u16 {
-        eprintln!("Data length of \"{data_length}\" is larger than maximum packet size of \"{PACKET_SIZE}\"");
-    }
-    let data_length_bytes: [u8; 2] = data_length.to_be_bytes();
-    packet[offset..offset + mem::size_of::<u16>()].copy_from_slice(&data_length_bytes);
-    offset += mem::size_of::<u16>();
+	// append data length
+	let data_length: u16 = (mem::size_of::<u16>() + data.len()) as u16;
+	if data_length > PACKET_SIZE as u16 {
+		eprintln!("Data length of \"{data_length}\" is larger than maximum packet size of \"{PACKET_SIZE}\"");
+	}
+	let data_length_bytes: [u8; 2] = data_length.to_be_bytes();
+	packet[offset..offset + mem::size_of::<u16>()].copy_from_slice(&data_length_bytes);
+	offset += mem::size_of::<u16>();
 
-    // append data
-    packet[offset..offset + data.len()].copy_from_slice(&data);
+	// append data
+	packet[offset..offset + data.len()].copy_from_slice(&data);
 
-    packet
+	packet
 }
 
 
@@ -89,63 +89,63 @@ pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
 // TODO: these tests aren't amazing since they assume that the output from functions are correct.
 // The output is then hard coded in the tests. Not sure of better way to fix them.
 mod tests {
-    use super::*;
-    use crate::packet::{self, PACKET_SIZE, Packet};
+	use super::*;
+	use crate::packet::{self, PACKET_SIZE, Packet};
 
-    #[test]
-    fn test_encode_packet() {
-        let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
-        let actual: [u8; PACKET_SIZE] = packet::encode_packet(data.clone());
-        let expected: [u8; PACKET_SIZE] = [vec![0, 13], data, vec![0u8; PACKET_SIZE - 13]]
-            .concat()
-            .try_into()
-            .unwrap();
+	#[test]
+	fn test_encode_packet() {
+		let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
+		let actual: [u8; PACKET_SIZE] = packet::encode_packet(data.clone());
+		let expected: [u8; PACKET_SIZE] = [vec![0, 13], data, vec![0u8; PACKET_SIZE - 13]]
+			.concat()
+			.try_into()
+			.unwrap();
 
-        assert_eq!(actual, expected);
-    }
+		assert_eq!(actual, expected);
+	}
 
-    #[test]
-    fn test_decode_packet() {
-        let expected = Packet {
-            data_length: 13,
-            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
-        };
+	#[test]
+	fn test_decode_packet() {
+		let expected = Packet {
+			data_length: 13,
+			data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
+		};
 
-        let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
-        let packet: [u8; PACKET_SIZE] = packet::encode_packet(data);
-        let actual = packet::decode_packet(packet);
+		let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
+		let packet: [u8; PACKET_SIZE] = packet::encode_packet(data);
+		let actual = packet::decode_packet(packet);
 
-        // need to wrap expected in Ok so that it matches the actual output, which hopefully is also Ok
-        assert_eq!(actual, Ok(expected));
-    }
+		// need to wrap expected in Ok so that it matches the actual output, which hopefully is also Ok
+		assert_eq!(actual, Ok(expected));
+	}
 
-    #[test]
-    fn test_decode_packet_error() {
-        // manually encode a malformed packet
-        let data_len: u16 = PACKET_SIZE as u16 + 1; // data_len is larger than PACKET_SIZE
-        let mut packet_bytes: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
+	#[test]
+	fn test_decode_packet_error() {
+		// manually encode a malformed packet
+		let data_len: u16 = PACKET_SIZE as u16 + 1; // data_len is larger than PACKET_SIZE
+		let mut packet_bytes: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
 
-        BigEndian::write_u16(&mut packet_bytes[0..2], data_len);
+		BigEndian::write_u16(&mut packet_bytes[0..2], data_len);
 
-        let result = packet::decode_packet(packet_bytes);
+		let result = packet::decode_packet(packet_bytes);
 
-        let expected_error = format!("Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\"");
+		let expected_error = format!("Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\"");
 
-        assert_eq!(result, Err(expected_error));
-    }
+		assert_eq!(result, Err(expected_error));
+	}
 
-    // I wasn't convinced that the PartialEq that rust autogenerated for Packet struct would be correct
-    #[test]
-    fn test_unequal_packets() {
-        let expected = Packet {
-            data_length: 87,
-            data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
-        };
+	// I wasn't convinced that the PartialEq that rust autogenerated for Packet struct would be correct
+	#[test]
+	fn test_unequal_packets() {
+		let expected = Packet {
+			data_length: 87,
+			data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
+		};
 
-        let data = vec![10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-        let packet: [u8; PACKET_SIZE] = packet::encode_packet(data);
-        let actual = packet::decode_packet(packet);
+		let data = vec![10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+		let packet: [u8; PACKET_SIZE] = packet::encode_packet(data);
+		let actual = packet::decode_packet(packet);
 
-        assert_ne!(actual, Ok(expected));
-    }
+		assert_ne!(actual, Ok(expected));
+	}
 }
