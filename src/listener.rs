@@ -22,11 +22,15 @@ use std::{
 	io::{ErrorKind, Read, Write},
 	net::{TcpListener, TcpStream},
 	path::{Path, PathBuf},
+	time::Duration,
 };
 use tokio::runtime::Runtime;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 type CatalogMap = HashMap<String, FileInfo>;
+
+// how long a single read or write on a peer connection may block before the connection is dropped
+const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 // this struct is public because it is used within gui.rs to populate listener information
 #[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize, Clone)]
@@ -515,6 +519,16 @@ fn fulfill_file_request(
 
 /// An asynchronous task that handles sending a file over `stream`
 pub async fn start_sender_task(mut stream: TcpStream) {
+	// keep a silent or stalled peer from occupying this task (and its worker thread) indefinitely
+	if let Err(e) = stream.set_read_timeout(Some(CONNECTION_TIMEOUT)) {
+		eprintln!("Failed to set read timeout: {e}");
+		return;
+	}
+	if let Err(e) = stream.set_write_timeout(Some(CONNECTION_TIMEOUT)) {
+		eprintln!("Failed to set write timeout: {e}");
+		return;
+	}
+
 	// carry out DH exchange
 	let dh_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
 	let dh_public_key = PublicKey::from(&dh_private_key);
