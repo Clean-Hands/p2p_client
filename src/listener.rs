@@ -533,17 +533,20 @@ pub async fn start_sender_task(mut stream: TcpStream) {
 	let dh_private_key = EphemeralSecret::random_from_rng(&mut OsRng);
 	let dh_public_key = PublicKey::from(&dh_private_key);
 
-	// send public key to listener
+	// send public key to requester
 	if let Err(e) = stream.write_all(dh_public_key.as_bytes()) {
 		eprintln!("Failed to send DH public key: {e}");
 		return;
 	}
 
-	// wait for public key response from listener
+	// wait for public key response from requester
 	let mut public_key_bytes: [u8; 32] = [0; 32];
 	match stream.read_exact(&mut public_key_bytes) {
 		Ok(_) => (),
-		Err(e) if e.kind() == ErrorKind::UnexpectedEof => return, // indicates ping was sent, so do not continue connection
+		Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
+			println!("Responded to ping from {:?}", stream.peer_addr().unwrap());
+			return
+		}, // indicates ping was sent, so do not continue connection
 		Err(e) => {
 			eprintln!("Failed to read peer's public key: {e}"); // if a Windows user pings themselves, this error is printed
 			return;
