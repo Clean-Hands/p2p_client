@@ -3,10 +3,11 @@
 //! June 6th, 2025
 //! CS347 Advanced Software Design
 
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 use eframe::{self, egui::ViewportBuilder};
 use tokio::runtime::Runtime;
-use std::path::PathBuf;
 mod encryption;
 mod file_rw;
 mod gui;
@@ -38,18 +39,30 @@ enum Mode {
 
 #[derive(Subcommand)]
 enum RequestCommand {
-	#[command(about = "Request a file from a peer. Peer can be an alias added using 'add-ip' or an IP address")]
+	#[command(
+		about = "Request a file from a peer. Peer can be an alias added using 'add-ip' or an IP \
+		         address"
+	)]
 	File {
-		peer: String,
+		peer:      String,
 		file_hash: String,
 		save_path: Option<PathBuf>,
 	},
-	#[command(about = "Request the catalog of a specific peer. Peer can be an alias added using 'add-ip' or an IP address")]
+	#[command(
+		about = "Request the catalog of a specific peer. Peer can be an alias added using \
+		         'add-ip' or an IP address"
+	)]
 	Catalog { peer: String },
-	#[command(about = "Check if a specific peer is available for requests. Peer can be an alias added using 'add-ip' or an IP address")]
+	#[command(
+		about = "Check if a specific peer is available for requests. Peer can be an alias added \
+		         using 'add-ip' or an IP address"
+	)]
 	Ping { peer: String },
 	#[command(about = "Add an alias and an associated IP to your list of known peers")]
-	AddIP { alias: String, peer_address: String },
+	AddIP {
+		alias:        String,
+		peer_address: String,
+	},
 	#[command(about = "Remove an IP from your list of known peers")]
 	RemoveIP { peer: String },
 	#[command(about = "View your local list of known peers")]
@@ -62,7 +75,10 @@ enum ListenCommand {
 	Start {},
 	#[command(about = "Add a file to your local catalog")]
 	AddFile { file_path: String },
-	#[command(about = "Remove a file from your local catalog. Input \"DELETE-ALL\" in place of a hash to wipe the catalog clean")]
+	#[command(
+		about = "Remove a file from your local catalog. Input \"DELETE-ALL\" in place of a hash \
+		         to wipe the catalog clean"
+	)]
 	RemoveFile { hash: String },
 	#[command(about = "View your local catalog")]
 	ViewCatalog {},
@@ -79,23 +95,24 @@ async fn main() {
 				file_hash,
 				save_path,
 			} => {
-				requester::request_file(peer, file_hash, save_path.unwrap_or(PathBuf::from("."))).await;
-			}
+				requester::request_file(peer, file_hash, save_path.unwrap_or(PathBuf::from(".")))
+					.await;
+			},
 			RequestCommand::Catalog { peer } => match requester::request_catalog(&peer) {
 				Ok(result) => {
 					println!("{result}")
-				}
+				},
 				Err(e) => {
 					eprintln!("Error while requesting catalog: {e}")
-				}
+				},
 			},
 			RequestCommand::Ping { peer } => match requester::ping_peer(&peer) {
 				Ok(result) => {
 					println!("{result}")
-				}
+				},
 				Err(e) => {
 					println!("{e}")
-				}
+				},
 			},
 			// TODO: do we want to change the name of the below command since we're using the alias
 			// as the key rather than the IP, or do we still want to emphasize that the IP is what
@@ -108,44 +125,44 @@ async fn main() {
 					eprintln!("Failed to add {alias} ({peer_address}) to list of peers: {e}");
 					return;
 				}
-			}
+			},
 			RequestCommand::RemoveIP { peer } => {
 				if let Err(e) = requester::remove_from_peer_list(&peer) {
 					eprintln!("Failed to remove {peer} from list of peers: {e}");
 					return;
 				}
-			}
+			},
 			RequestCommand::ViewIPS {} => {
 				if let Err(e) = requester::print_peer_list() {
 					eprintln!("Failed to print peer list: {e}");
 					return;
 				}
-			}
+			},
 		},
 
 		// parse the listen subcommand
 		Some(Mode::Listen { command }) => match command {
 			ListenCommand::Start {} => {
 				listener::start_listening().await;
-			}
+			},
 			ListenCommand::ViewCatalog {} => {
 				if let Err(e) = listener::print_catalog() {
 					eprintln!("Failed to print catalog: {e}");
 					return;
 				}
-			}
+			},
 			ListenCommand::AddFile { file_path } => {
 				if let Err(e) = listener::add_file_to_catalog(&file_path) {
 					eprintln!("Error adding file to catalog: {e}");
 					return;
 				}
-			}
+			},
 			ListenCommand::RemoveFile { hash } => {
 				if let Err(e) = listener::remove_file_from_catalog(&hash) {
 					eprintln!("Error removing file from catalog: {e}");
 					return;
 				}
-			}
+			},
 		},
 
 		None => {
@@ -168,27 +185,30 @@ async fn main() {
 					..Default::default() // Set all options other than `viewport` to their defaults
 				},
 				Box::new(|cc| Ok(Box::new(gui::P2PGui::new(cc)))),
-			).unwrap();
+			)
+			.unwrap();
 
 			// Kill the async listening task
 			runtime.shutdown_background();
-		}
+		},
 	}
 }
 
 #[cfg(test)]
 mod tests {
 
-	use crate::{listener, packet::compute_sha256_hash, requester};
-	use serial_test::serial;
 	use std::{
 		fs,
 		io::{BufWriter, Write},
 		net::TcpListener,
 		path::PathBuf,
 	};
+
+	use serial_test::serial;
 	use tempfile::NamedTempFile;
 	use tokio::runtime::Runtime;
+
+	use crate::{listener, packet::compute_sha256_hash, requester};
 
 	/// create a temp file for testing
 	fn create_large_file(size_in_mb: usize) -> NamedTempFile {
@@ -197,7 +217,7 @@ mod tests {
 			let mut writer = BufWriter::new(&file);
 			let buffer = vec![b'x'; 1024]; // 1 KB
 
-			for _ in 0..(size_in_mb * 1024) {
+			for _ in 0 .. (size_in_mb * 1024) {
 				writer.write_all(&buffer).unwrap();
 			}
 			writer.flush().unwrap();
@@ -213,11 +233,13 @@ mod tests {
 			Err(e) => {
 				eprintln!("Failed to bind: {}", e);
 				return;
-			}
+			},
 		};
 
 		// start handling incoming connections
-		let (stream, _) = listener.accept().expect("Failed to accept connection");
+		let (stream, _) = listener
+			.accept()
+			.expect("Failed to accept connection");
 		listener::start_sender_task(stream).await;
 	}
 
@@ -244,7 +266,11 @@ mod tests {
 		let rq_file_hash = hex::encode(&file_hash);
 		let runtime = Runtime::new().expect("Failed to create a runtime");
 		let _ = runtime.enter();
-		runtime.block_on(requester::request_file(address, rq_file_hash.clone(), PathBuf::from(".")));
+		runtime.block_on(requester::request_file(
+			address,
+			rq_file_hash.clone(),
+			PathBuf::from("."),
+		));
 
 		// validate the received file
 		let file_name = dummy_file

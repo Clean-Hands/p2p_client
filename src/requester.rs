@@ -3,17 +3,6 @@
 //! June 6th, 2025
 //! CS347 Advanced Software Design
 
-use crate::encryption;
-use crate::file_rw;
-use crate::packet;
-use aes_gcm::{
-	Aes256Gcm, Key,
-	aead::{KeyInit, OsRng},
-};
-use directories::ProjectDirs;
-use hex;
-use serde::{Deserialize, Serialize};
-use size::Size;
 use std::{
 	collections::HashMap,
 	env,
@@ -24,7 +13,19 @@ use std::{
 	thread::sleep,
 	time::{Duration, Instant},
 };
+
+use aes_gcm::{
+	Aes256Gcm,
+	Key,
+	aead::{KeyInit, OsRng},
+};
+use directories::ProjectDirs;
+use hex;
+use serde::{Deserialize, Serialize};
+use size::Size;
 use x25519_dalek::{EphemeralSecret, PublicKey};
+
+use crate::{encryption, file_rw, packet};
 
 type PeerMap = HashMap<String, String>;
 type CatalogMap = HashMap<String, FileInfo>;
@@ -140,8 +141,8 @@ fn write_updated_peer_list(peer_list: &PeerMap) -> Result<(), String> {
 /// let alias = String::from("Alice");
 /// let peer_address = String::from("10.123.456.789");
 /// if let Err(e) = add_peer(&alias, &peer_address) {
-///     eprintln!("Failed to add {alias} ({peer_address}) to list of peers: {e}");
-///     return;
+/// 	eprintln!("Failed to add {alias} ({peer_address}) to list of peers: {e}");
+/// 	return;
 /// }
 /// ```
 pub fn add_peer(alias: &String, peer_addr: &String) -> Result<(), String> {
@@ -173,8 +174,8 @@ pub fn add_peer(alias: &String, peer_addr: &String) -> Result<(), String> {
 /// ```rust
 /// let peer = String::from("Alice");
 /// if let Err(e) = remove_from_peer_list(&peer) {
-///     eprintln!("Failed to remove {peer} from list of peers: {e}");
-///     return;
+/// 	eprintln!("Failed to remove {peer} from list of peers: {e}");
+/// 	return;
 /// }
 /// ```
 pub fn remove_from_peer_list(alias: &String) -> Result<(), String> {
@@ -192,7 +193,7 @@ pub fn remove_from_peer_list(alias: &String) -> Result<(), String> {
 			Some(f) => {
 				let peer_addr = String::from(f);
 				println!("Successfully removed {alias} ({peer_addr}) from catalog")
-			}
+			},
 		};
 	}
 
@@ -212,10 +213,10 @@ pub fn remove_from_peer_list(alias: &String) -> Result<(), String> {
 ///
 /// ```rust
 /// if let Err(e) = requester::print_peer_list() {
-///    eprintln!("Failed to print peer list: {e}");
-///    return;
+/// 	eprintln!("Failed to print peer list: {e}");
+/// 	return;
 /// }
-///```
+/// ```
 pub fn print_peer_list() -> Result<(), String> {
 	let peer_list = match get_deserialized_peer_list() {
 		Ok(c) => c,
@@ -339,11 +340,11 @@ fn connect_stream(addr: &String) -> TcpStream {
 		match TcpStream::connect_timeout(&socket_addr, PING_TIMEOUT) {
 			Ok(s) => {
 				return s;
-			}
+			},
 			Err(e) => {
 				eprintln!("Failed to connect to {send_addr}: {e}");
 				sleep(PING_TIMEOUT);
-			}
+			},
 		};
 	}
 }
@@ -367,12 +368,12 @@ fn connect_stream(addr: &String) -> TcpStream {
 /// ```rust
 /// let peer = String::from("Alice");
 /// match request_catalog(&peer) {
-///     Ok(result) => {
-///         println!("{result}")
-///     },
-///     Err(e) => {
-///         eprintln!("Error while requesting catalog: {e}")
-///     }
+/// 	Ok(result) => {
+/// 		println!("{result}")
+/// 	},
+/// 	Err(e) => {
+/// 		eprintln!("Error while requesting catalog: {e}")
+/// 	},
 /// }
 /// ```
 pub fn request_catalog(peer: &String) -> Result<String, String> {
@@ -391,7 +392,9 @@ pub fn request_catalog(peer: &String) -> Result<String, String> {
 	// send mode packet
 	let mut nonce: [u8; 12] = [0; 12];
 	let req_catalog_packet = packet::encode_packet(String::from("request_catalog").into_bytes());
-	if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet) {
+	if let Err(e) =
+		encryption::send_to_connection(&mut stream, &mut nonce, &cipher, req_catalog_packet)
+	{
 		return Err(format!("Failed to send request for peer's catalog {e}"));
 	}
 
@@ -412,7 +415,7 @@ pub fn request_catalog(peer: &String) -> Result<String, String> {
 				};
 
 				catalog_bytes.extend_from_slice(&packet.data);
-			}
+			},
 			Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
 			Err(e) => return Err(format!("Error reading from stream: {e}")),
 		}
@@ -445,7 +448,11 @@ pub fn request_catalog(peer: &String) -> Result<String, String> {
 	// dynamically determine max size length
 	let max_size_len = catalog
 		.values()
-		.map(|info| Size::from_bytes(info.file_size).to_string().len())
+		.map(|info| {
+			Size::from_bytes(info.file_size)
+				.to_string()
+				.len()
+		})
 		.filter(|length| length > &"Size".len())
 		.max()
 		.unwrap_or("Size".len());
@@ -609,8 +616,10 @@ fn save_incoming_file(
 				let expected_hash = match hex::decode(hash) {
 					Ok(b) => b,
 					Err(e) => {
-						return Err(format!("Failed to decode hash into raw bytes from hex: {e}"));
-					}
+						return Err(format!(
+							"Failed to decode hash into raw bytes from hex: {e}"
+						));
+					},
 				};
 
 				if computed_file_hash != expected_hash {
@@ -622,7 +631,7 @@ fn save_incoming_file(
 				}
 
 				return Ok(());
-			}
+			},
 			Err(e) => return Err(format!("Failed to read from stream: {e}")),
 		};
 
@@ -636,7 +645,10 @@ fn save_incoming_file(
 			Err(e) => return Err(format!("Unable to decode packet: {e}")),
 		};
 
-		let data_bytes_delta: u64 = received_packet.data_length.try_into().unwrap();
+		let data_bytes_delta: u64 = received_packet
+			.data_length
+			.try_into()
+			.unwrap();
 		curr_bytes_read += data_bytes_delta;
 		if let Err(e) = file.write_all(&received_packet.data) {
 			return Err(format!("Failed to write byte to file: {e}"));
@@ -712,7 +724,7 @@ fn resolve_tilde(path: PathBuf) -> Result<PathBuf, String> {
 				} else {
 					Ok(path)
 				}
-			}
+			},
 			None => Err("Failed to convert path to string".to_string()),
 		}
 	} else {
@@ -743,7 +755,7 @@ pub async fn request_file(peer: String, hash: String, file_path: PathBuf) {
 		Err(e) => {
 			eprintln!("Failed to remove ~ from file path: {e}");
 			return;
-		}
+		},
 	};
 
 	// determine if user input an alias or an IP
@@ -752,7 +764,7 @@ pub async fn request_file(peer: String, hash: String, file_path: PathBuf) {
 		Err(e) => {
 			eprintln!("{e}");
 			return;
-		}
+		},
 	};
 
 	let mut stream = connect_stream(&addr);
@@ -762,7 +774,7 @@ pub async fn request_file(peer: String, hash: String, file_path: PathBuf) {
 		Err(e) => {
 			eprintln!("Diffie-Hellman handshake failed: {e}");
 			return;
-		}
+		},
 	};
 
 	// send mode packet
@@ -797,11 +809,13 @@ pub async fn request_file(peer: String, hash: String, file_path: PathBuf) {
 /// Tests will fail if your local machine is both running a listener and running tests.
 #[cfg(test)]
 mod tests {
+	use std::{fs, net::TcpListener};
+
+	use serial_test::serial;
+	use tokio::runtime::Runtime;
+
 	use super::*;
 	use crate::listener;
-	use serial_test::serial;
-	use std::{fs, net::TcpListener};
-	use tokio::runtime::Runtime;
 
 	#[test]
 	fn test_peer_list_workflow() {
@@ -858,11 +872,13 @@ mod tests {
 			Err(e) => {
 				eprintln!("Failed to bind: {}", e);
 				return;
-			}
+			},
 		};
 
 		// start handling incoming connections
-		let (stream, _) = listener.accept().expect("Failed to accept connection");
+		let (stream, _) = listener
+			.accept()
+			.expect("Failed to accept connection");
 		listener::start_sender_task(stream).await;
 	}
 

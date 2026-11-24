@@ -3,9 +3,13 @@
 //! June 8th, 2025
 //! CS347 Advanced Software Design
 
-use crate::listener;
-use crate::requester;
-use eframe::egui::{self,
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+};
+
+use eframe::egui::{
+	self,
 	Align,
 	Button,
 	CentralPanel,
@@ -22,10 +26,8 @@ use eframe::egui::{self,
 use rfd::FileDialog;
 use size::Size;
 use tokio::runtime::Runtime;
-use std::{
-	collections::HashMap,
-	path::{Path, PathBuf},
-};
+
+use crate::{listener, requester};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 enum AppTab {
@@ -35,19 +37,19 @@ enum AppTab {
 }
 
 pub struct P2PGui {
-	runtime: Option<Runtime>, // Use Option to allow taking ownership in on_exit
-	error_string: String,
-	peer: String,
-	save_path: String,
-	file_options: Vec<(String, String)>,
-	peer_vec: Vec<(String, String)>,
-	new_peer_vec: Vec<(String, String)>,
-	modify_peers: bool,
-	current_tab: AppTab,
-	catalog: Option<HashMap<String, listener::FileInfo>>,
-	catalog_width: usize,
+	runtime:           Option<Runtime>, // Use Option to allow taking ownership in on_exit
+	error_string:      String,
+	peer:              String,
+	save_path:         String,
+	file_options:      Vec<(String, String)>,
+	peer_vec:          Vec<(String, String)>,
+	new_peer_vec:      Vec<(String, String)>,
+	modify_peers:      bool,
+	current_tab:       AppTab,
+	catalog:           Option<HashMap<String, listener::FileInfo>>,
+	catalog_width:     usize,
 	catalog_edit_mode: bool,
-	new_catalog: HashMap<String, listener::FileInfo>
+	new_catalog:       HashMap<String, listener::FileInfo>,
 }
 
 
@@ -59,10 +61,7 @@ impl P2PGui {
 
 		ui.horizontal(|ui| {
 			ui.label("Save path:");
-			ui.add(
-				TextEdit::singleline(&mut self.save_path)
-					.desired_width(f32::INFINITY)
-			);
+			ui.add(TextEdit::singleline(&mut self.save_path).desired_width(f32::INFINITY));
 		});
 		ui.add_space(5.0);
 		ui.horizontal(|ui| {
@@ -75,7 +74,10 @@ impl P2PGui {
 						.desired_width(f32::INFINITY)
 						.hint_text("Enter peer alias or IP"),
 				);
-				let enter_pressed = ui.ctx().input(|i| i.key_pressed(Key::Enter)) && peer_input.lost_focus();
+				let enter_pressed = ui
+					.ctx()
+					.input(|i| i.key_pressed(Key::Enter))
+					&& peer_input.lost_focus();
 
 				if enter_pressed || request_clicked {
 					if let Err(e) = requester::ping_peer(&self.peer) {
@@ -86,20 +88,31 @@ impl P2PGui {
 							Err(e) => {
 								self.error_string = e;
 								String::new()
-							}
+							},
 						};
 
 						let catalog_lines: Vec<Vec<&str>> = catalog_string
 							.lines()
 							.filter(|line| line.contains('.'))
-							.map(|line| line.split('|').rev().collect::<Vec<&str>>())
+							.map(|line| {
+								line.split('|')
+									.rev()
+									.collect::<Vec<&str>>()
+							})
 							.collect();
 
 						self.file_options = vec![];
 						for mut line in catalog_lines {
-							let hash = line.split_off(2).join("").trim().to_string();
-							let file_info = format!("{:<5}  {}", line[0], line[1]).trim().to_string();
-							self.file_options.push((file_info, hash));
+							let hash = line
+								.split_off(2)
+								.join("")
+								.trim()
+								.to_string();
+							let file_info = format!("{:<5}  {}", line[0], line[1])
+								.trim()
+								.to_string();
+							self.file_options
+								.push((file_info, hash));
 						}
 					}
 				}
@@ -120,7 +133,7 @@ impl P2PGui {
 						Err(e) => {
 							self.error_string = e;
 							HashMap::new()
-						}
+						},
 					};
 
 					for peer in peer_hashmap {
@@ -139,14 +152,20 @@ impl P2PGui {
 					.min_scrolled_height(0.0) // default 64px minimum overflows beneath the bottom button in short windows
 					.show(ui, |ui| {
 						if self.file_options.len() > 0 {
-							for i in 0..self.file_options.len() {
-								if ui.button(RichText::new(&self.file_options[i].0).monospace()).double_clicked() {
+							for i in 0 .. self.file_options.len() {
+								if ui
+									.button(RichText::new(&self.file_options[i].0).monospace())
+									.double_clicked()
+								{
 									// Safe to unwrap here since we check in update() that runtime exists
-									self.runtime.as_ref().unwrap().spawn(requester::request_file(
-										self.peer.to_owned(),
-										self.file_options[i].1.to_owned(),
-										PathBuf::from(&self.save_path),
-									));
+									self.runtime
+										.as_ref()
+										.unwrap()
+										.spawn(requester::request_file(
+											self.peer.to_owned(),
+											self.file_options[i].1.to_owned(),
+											PathBuf::from(&self.save_path),
+										));
 								}
 							}
 						} else {
@@ -169,7 +188,10 @@ impl P2PGui {
 			.show_separator_line(false)
 			.show_inside(ui, |ui| {
 				ui.add_space(5.0);
-				if ui.button("Add/Remove Catalog Files").clicked() {
+				if ui
+					.button("Add/Remove Catalog Files")
+					.clicked()
+				{
 					self.new_catalog = match &self.catalog {
 						Some(map) => map.clone(),
 						None => HashMap::new(),
@@ -209,7 +231,9 @@ impl P2PGui {
 										let max_size_len = catalog_vec
 											.iter()
 											.map(|(_, info)| {
-												Size::from_bytes(info.file_size).to_string().len()
+												Size::from_bytes(info.file_size)
+													.to_string()
+													.len()
 											})
 											.max()
 											.unwrap_or("Size".len());
@@ -239,13 +263,14 @@ impl P2PGui {
 											);
 
 											// show the full file path when you hover over a row
-											ui.monospace(row_text).on_hover_text(&info.file_path);
+											ui.monospace(row_text)
+												.on_hover_text(&info.file_path);
 										}
 									}
-								}
+								},
 								None => {
 									ui.label("Failed to load catalog.");
-								}
+								},
 							}
 						},
 					);
@@ -267,24 +292,24 @@ impl P2PGui {
 		let _ = runtime.enter();
 
 		Self {
-			runtime: Some(runtime),
-			error_string: String::new(),
-			peer: String::new(),
-			save_path: String::from(
+			runtime:           Some(runtime),
+			error_string:      String::new(),
+			peer:              String::new(),
+			save_path:         String::from(
 				std::env::current_dir()
 					.unwrap_or(PathBuf::from("."))
 					.to_str()
 					.unwrap_or("."),
 			),
-			file_options: vec![],
-			peer_vec: vec![],
-			new_peer_vec: vec![],
-			modify_peers: false,
-			current_tab: AppTab::Request,
-			catalog: None,
-			catalog_width: 500,
+			file_options:      vec![],
+			peer_vec:          vec![],
+			new_peer_vec:      vec![],
+			modify_peers:      false,
+			current_tab:       AppTab::Request,
+			catalog:           None,
+			catalog_width:     500,
 			catalog_edit_mode: false,
-			new_catalog: HashMap::new(),
+			new_catalog:       HashMap::new(),
 		}
 	}
 }
@@ -305,13 +330,15 @@ impl eframe::App for P2PGui {
 			ui.horizontal(|ui| {
 				if ui
 					.selectable_label(self.current_tab == AppTab::Request, "Request Files")
-					.clicked() {
+					.clicked()
+				{
 					self.current_tab = AppTab::Request;
 				}
 
 				if ui
 					.selectable_value(&mut self.current_tab, AppTab::Listen, "Share Files")
-					.clicked() {
+					.clicked()
+				{
 					self.current_tab = AppTab::Listen;
 				}
 			});
@@ -324,7 +351,7 @@ impl eframe::App for P2PGui {
 				Err(e) => {
 					self.error_string = e;
 					PathBuf::new()
-				}
+				},
 			};
 
 			// save catalog to be used later
@@ -333,7 +360,7 @@ impl eframe::App for P2PGui {
 				Err(e) => {
 					self.error_string = e;
 					None
-				}
+				},
 			};
 		}
 
@@ -375,13 +402,18 @@ impl eframe::App for P2PGui {
 							ui.add_space(5.0);
 							ui.horizontal(|ui| {
 								if ui.button("Save").clicked() {
-									for i in 0..self.new_peer_vec.len() {
+									for i in 0 .. self.new_peer_vec.len() {
 										let (new_alias, new_addr) = &self.new_peer_vec[i];
 										// if a peer was added, add new peer to local peer list
 										if i >= self.peer_vec.len() {
 											if new_alias.len() > 0 && new_addr.len() > 0 {
-												if let Err(e) = requester::add_peer(&new_alias, &new_addr) {
-													self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
+												if let Err(e) =
+													requester::add_peer(&new_alias, &new_addr)
+												{
+													self.error_string = format!(
+														"Failed to add {new_alias} ({new_addr}) \
+														 to list of peers: {e}"
+													);
 												}
 											}
 											continue;
@@ -390,19 +422,32 @@ impl eframe::App for P2PGui {
 										let (alias, addr) = &self.peer_vec[i];
 										// if a peer was deleted, remove peer from local peer list
 										if new_alias.len() == 0 && new_addr.len() == 0 {
-											if let Err(e) = requester::remove_from_peer_list(&alias) {
-												self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
+											if let Err(e) = requester::remove_from_peer_list(&alias)
+											{
+												self.error_string = format!(
+													"Failed to remove {alias} from list of peers: \
+													 {e}"
+												);
 											}
 											continue;
 										}
 
 										// if a peer was modified, update the local peer list
 										if alias != new_alias || addr != new_addr {
-											if let Err(e) = requester::remove_from_peer_list(&alias) {
-												self.error_string = format!("Failed to remove {alias} from list of peers: {e}");
+											if let Err(e) = requester::remove_from_peer_list(&alias)
+											{
+												self.error_string = format!(
+													"Failed to remove {alias} from list of peers: \
+													 {e}"
+												);
 											}
-											if let Err(e) = requester::add_peer(&new_alias, &new_addr) {
-												self.error_string = format!("Failed to add {new_alias} ({new_addr}) to list of peers: {e}");
+											if let Err(e) =
+												requester::add_peer(&new_alias, &new_addr)
+											{
+												self.error_string = format!(
+													"Failed to add {new_alias} ({new_addr}) to \
+													 list of peers: {e}"
+												);
 											}
 										}
 									}
@@ -422,8 +467,15 @@ impl eframe::App for P2PGui {
 							.show_separator_line(false)
 							.show_inside(ui, |ui| {
 								ui.add_space(5.0);
-								if ui.add_sized(Vec2::new(ui.available_width(), 0.0), Button::new("+ Add New Peer")).clicked() {
-									self.new_peer_vec.push(("".to_string(), "".to_string()));
+								if ui
+									.add_sized(
+										Vec2::new(ui.available_width(), 0.0),
+										Button::new("+ Add New Peer"),
+									)
+									.clicked()
+								{
+									self.new_peer_vec
+										.push(("".to_string(), "".to_string()));
 								}
 							});
 
@@ -433,21 +485,26 @@ impl eframe::App for P2PGui {
 							.show(ui, |ui| {
 								if self.new_peer_vec != vec![] {
 									for (new_alias, new_addr) in &mut self.new_peer_vec {
-											ui.horizontal(|ui| {
-												// split the row between the two fields in a 150:120 ratio, leaving room for the delete button
-												let delete_button_width = 20.0;
-												let fields_width = ui.available_width() - delete_button_width - ui.spacing().item_spacing.x * 2.0;
-												ui.add_sized([fields_width * 0.5, 20.0],
-													TextEdit::singleline(new_alias).hint_text("Alias")
-												);
-												ui.add_sized([fields_width * 0.5, 20.0],
-													TextEdit::singleline(new_addr).hint_text("IP Address")
-												);
-												if ui.button("🗑").clicked() {
-													new_alias.clear();
-													new_addr.clear();
-												}
-											});
+										ui.horizontal(|ui| {
+											// split the row between the two fields in a 150:120 ratio, leaving room for the delete button
+											let delete_button_width = 20.0;
+											let fields_width = ui.available_width()
+												- delete_button_width
+												- ui.spacing().item_spacing.x * 2.0;
+											ui.add_sized(
+												[fields_width * 0.5, 20.0],
+												TextEdit::singleline(new_alias).hint_text("Alias"),
+											);
+											ui.add_sized(
+												[fields_width * 0.5, 20.0],
+												TextEdit::singleline(new_addr)
+													.hint_text("IP Address"),
+											);
+											if ui.button("🗑").clicked() {
+												new_alias.clear();
+												new_addr.clear();
+											}
+										});
 									}
 								} else {
 									ui.label("Peer list is empty.");
@@ -464,7 +521,6 @@ impl eframe::App for P2PGui {
 				.default_size([300.0, 200.0])
 				.min_size([100.0, 120.0])
 				.show(ctx, |ui| {
-
 					TopBottomPanel::bottom("close_edit_catalog")
 						.frame(Frame::NONE)
 						.show_separator_line(false)
@@ -475,7 +531,7 @@ impl eframe::App for P2PGui {
 								self.catalog = Some(self.new_catalog.clone());
 								self.catalog_edit_mode = false;
 							}
-					});
+						});
 
 					ui.group(|ui| {
 						// Anchor the add button to the bottom of the group so the file list cannot push it out of the window
@@ -484,19 +540,33 @@ impl eframe::App for P2PGui {
 							.show_separator_line(false)
 							.show_inside(ui, |ui| {
 								ui.add_space(5.0);
-								if ui.add_sized(Vec2::new(ui.available_width(), 0.0), Button::new("+ Add File")).clicked() {
+								if ui
+									.add_sized(
+										Vec2::new(ui.available_width(), 0.0),
+										Button::new("+ Add File"),
+									)
+									.clicked()
+								{
 									if let Some(picked_path) = FileDialog::new().pick_file() {
-										let path_str = picked_path.to_string_lossy().to_string();
+										let path_str = picked_path
+											.to_string_lossy()
+											.to_string();
 
 										if let Err(e) = listener::add_file_to_catalog(&path_str) {
-											self.error_string = format!("Failed to add to catalog: {e}");
+											self.error_string =
+												format!("Failed to add to catalog: {e}");
 										} else {
 											// update catalog
 											// probably better to do this without needing to re-read the
 											// catalog from disk. would need to manually insert all parts
 											// of the dictionary entry
-											if let Some(catalog_path) = listener::get_catalog_path().ok() {
-												if let Ok(catalog_map) = listener::get_deserialized_catalog(&catalog_path) {
+											if let Some(catalog_path) =
+												listener::get_catalog_path().ok()
+											{
+												if let Ok(catalog_map) =
+													listener::get_deserialized_catalog(
+														&catalog_path,
+													) {
 													// need to update new catalog as well to show changes
 													// immediately
 													self.new_catalog = catalog_map;
@@ -515,7 +585,9 @@ impl eframe::App for P2PGui {
 									ui.horizontal(|ui| {
 										let total_width = ui.available_width();
 										let delete_button_width = 20.0;
-										let file_name_width = total_width - delete_button_width - ui.spacing().item_spacing.x;
+										let file_name_width = total_width
+											- delete_button_width
+											- ui.spacing().item_spacing.x;
 
 										let file_name = Path::new(&info.file_path)
 											.file_name()
@@ -530,8 +602,10 @@ impl eframe::App for P2PGui {
 										.on_hover_text(&info.file_path);
 
 										if ui.button("🗑").clicked() {
-											if let Err(e) = listener::remove_file_from_catalog(hash) {
-												self.error_string = format!("Error removing from catalog: {e}");
+											if let Err(e) = listener::remove_file_from_catalog(hash)
+											{
+												self.error_string =
+													format!("Error removing from catalog: {e}");
 											} else {
 												to_remove.push(hash.clone());
 											}

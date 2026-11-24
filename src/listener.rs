@@ -3,19 +3,6 @@
 //! June 6th, 2025
 //! CS347 Advanced Software Design
 
-use crate::encryption;
-use crate::file_rw;
-use crate::packet;
-use aes_gcm::{
-	Aes256Gcm, Key,
-	aead::{KeyInit, OsRng},
-};
-use directories::ProjectDirs;
-use hex;
-use memmap2::Mmap;
-use serde::{Deserialize, Serialize};
-use serde_json;
-use size::Size;
 use std::{
 	collections::HashMap,
 	fs::{self, File},
@@ -24,8 +11,22 @@ use std::{
 	path::{Path, PathBuf},
 	time::Duration,
 };
+
+use aes_gcm::{
+	Aes256Gcm,
+	Key,
+	aead::{KeyInit, OsRng},
+};
+use directories::ProjectDirs;
+use hex;
+use memmap2::Mmap;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use size::Size;
 use tokio::runtime::Runtime;
 use x25519_dalek::{EphemeralSecret, PublicKey};
+
+use crate::{encryption, file_rw, packet};
 
 type CatalogMap = HashMap<String, FileInfo>;
 
@@ -130,7 +131,7 @@ fn write_updated_catalog(catalog_path: &PathBuf, catalog: &CatalogMap) -> Result
 
 
 /// Computes hash of a given file given the file's path. Hash is represented in hexadecimal.
-fn compute_hash(file_path: &PathBuf) -> Result<String, String>{
+fn compute_hash(file_path: &PathBuf) -> Result<String, String> {
 	// for large files (> ~100 MB) hashing can take a significant amount of time
 	println!("Computing file hash...");
 
@@ -152,8 +153,8 @@ fn compute_hash(file_path: &PathBuf) -> Result<String, String>{
 ///
 /// ```rust
 /// if let Err(e) = listener::add_file_to_catalog(&file_path) {
-///     eprintln!("Error adding file to catalog: {e}");
-///     return;
+/// 	eprintln!("Error adding file to catalog: {e}");
+/// 	return;
 /// }
 /// ```
 pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
@@ -170,8 +171,10 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 	let absolute_file_path = match fs::canonicalize(&file_path) {
 		Ok(p) => p,
 		Err(e) => {
-			return Err(format!("Unable to get the requested file's absolute path: {e}"));
-		}
+			return Err(format!(
+				"Unable to get the requested file's absolute path: {e}"
+			));
+		},
 	};
 
 	// get hash of file
@@ -179,7 +182,7 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 		Ok(h) => h,
 		Err(e) => {
 			return Err(format!("Failed to compute hash: {e}"));
-		}
+		},
 	};
 
 	// get size of file
@@ -189,7 +192,12 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 	};
 
 	// put file path and file size into a FileInfo object
-	let file_info = FileInfo::new(absolute_file_path.to_string_lossy().into_owned(), file_size);
+	let file_info = FileInfo::new(
+		absolute_file_path
+			.to_string_lossy()
+			.into_owned(),
+		file_size,
+	);
 
 	// add/update entry in catalog
 	catalog.insert(file_hash_string.clone(), file_info);
@@ -214,8 +222,8 @@ pub fn add_file_to_catalog(file_path: &String) -> Result<(), String> {
 /// ```rust
 /// let hash = String::from("a04be9a1841bd200e6ed9bd431ca71cd176b9779be9f52ef58635bacf10e04fc");
 /// if let Err(e) = remove_file_from_catalog(&hash) {
-///     eprintln!("Error removing file from catalog: {e}");
-///     return;
+/// 	eprintln!("Error removing file from catalog: {e}");
+/// 	return;
 /// }
 /// ```
 pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
@@ -262,8 +270,8 @@ pub fn remove_file_from_catalog(hash: &String) -> Result<(), String> {
 ///
 /// ```rust
 /// if let Err(e) = print_catalog() {
-///     eprintln!("Unable to print catalog: {e}");
-///     return;
+/// 	eprintln!("Unable to print catalog: {e}");
+/// 	return;
 /// }
 /// ```
 pub fn print_catalog() -> Result<(), String> {
@@ -287,7 +295,9 @@ pub fn print_catalog() -> Result<(), String> {
 		.values() // get iterator over the file paths stored in catalog
 		// for each path, get the name of the file and its length
 		.filter_map(|info| {
-			let name = Path::new(&info.file_path).file_name()?.to_str()?;
+			let name = Path::new(&info.file_path)
+				.file_name()?
+				.to_str()?;
 			Some(name.len())
 		})
 		// make sure that we don't go under the length of the table header
@@ -298,7 +308,11 @@ pub fn print_catalog() -> Result<(), String> {
 	// dynamically determine max size length
 	let max_size_len = catalog
 		.values()
-		.map(|info| Size::from_bytes(info.file_size).to_string().len())
+		.map(|info| {
+			Size::from_bytes(info.file_size)
+				.to_string()
+				.len()
+		})
 		.filter(|length| length > &"Size".len())
 		.max()
 		.unwrap_or("Size".len());
@@ -396,11 +410,14 @@ fn send_file_metadata(
 	// send file name
 	match file_path.file_name() {
 		Some(f) => {
-			let file_name_packet = packet::encode_packet(f
+			let file_name_bytes = f
 				.to_string_lossy()
 				.into_owned()
-				.into_bytes());
-			if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet) {
+				.into_bytes();
+			let file_name_packet = packet::encode_packet(file_name_bytes);
+			if let Err(e) =
+				encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_name_packet)
+			{
 				return Err(format!("Unable to send file name: {e}"));
 			}
 		},
@@ -414,7 +431,9 @@ fn send_file_metadata(
 	};
 	let file_size_bytes = file_size.to_be_bytes().to_vec();
 	let file_size_packet = packet::encode_packet(file_size_bytes);
-	if let Err(e) = encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_size_packet) {
+	if let Err(e) =
+		encryption::send_to_connection(&mut stream, &mut nonce, &cipher, file_size_packet)
+	{
 		return Err(format!("Unable to send file size: {e}"));
 	}
 
@@ -545,7 +564,7 @@ pub async fn start_sender_task(mut stream: TcpStream) {
 		Ok(_) => (),
 		Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
 			println!("Responded to ping from {:?}", stream.peer_addr().unwrap());
-			return
+			return;
 		}, // indicates ping was sent, so do not continue connection
 		Err(e) => {
 			eprintln!("Failed to read peer's public key: {e}"); // if a Windows user pings themselves, this error is printed
@@ -645,10 +664,12 @@ pub async fn start_listening() {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use serial_test::serial;
 	use std::io::BufWriter;
+
+	use serial_test::serial;
 	use tempfile::NamedTempFile;
+
+	use super::*;
 
 	/// Create a temp file for testing
 	fn create_large_file(size_in_mb: usize) -> NamedTempFile {
@@ -657,7 +678,7 @@ mod tests {
 			let mut writer = BufWriter::new(&file);
 			let buffer = vec![b'x'; 1024]; // 1 KB
 
-			for _ in 0..(size_in_mb * 1024) {
+			for _ in 0 .. (size_in_mb * 1024) {
 				writer.write_all(&buffer).unwrap();
 			}
 			writer.flush().unwrap();
@@ -709,7 +730,10 @@ mod tests {
 		let hash_bytes = packet::compute_sha256_hash(&data);
 		let hash_hex = hex::encode(hash_bytes);
 
-		let stored_path = &read_result.get(&hash_hex).unwrap().file_path;
+		let stored_path = &read_result
+			.get(&hash_hex)
+			.unwrap()
+			.file_path;
 		let canonical_stored = fs::canonicalize(stored_path).unwrap();
 		let canonical_file_path = fs::canonicalize(&file_path_clone).unwrap();
 
@@ -736,8 +760,7 @@ mod tests {
 	#[test]
 	#[serial]
 	fn test_fulfilling_catalog_request() {
-		use std::thread;
-		use std::time::Duration;
+		use std::{thread, time::Duration};
 
 		let catalog_path = get_catalog_path().unwrap();
 		let backup_path = catalog_path.with_file_name("catalog.json.backup");

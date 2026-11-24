@@ -3,9 +3,10 @@
 //! June 4th, 2025
 //! CS347 Advanced Software Design
 
+use std::mem;
+
 use byteorder::{BigEndian, ByteOrder};
 use sha2::{Digest, Sha256};
-use std::mem;
 
 pub const PACKET_SIZE: usize = 1024 * 16; // 16KB
 
@@ -17,7 +18,7 @@ pub const PACKET_SIZE: usize = 1024 * 16; // 16KB
 #[derive(Default, Debug, PartialEq)]
 pub struct Packet {
 	pub data_length: u16,
-	pub data: Vec<u8>, // up to PACKET_SIZE-2 bytes
+	pub data:        Vec<u8>, // up to PACKET_SIZE-2 bytes
 }
 
 
@@ -40,16 +41,21 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 	let mut offset = 0;
 
 	// convert data length bytes into u16
-	let data_len = BigEndian::read_u16(&packet_bytes[offset..offset + mem::size_of::<u16>()]);
+	let data_len = BigEndian::read_u16(&packet_bytes[offset .. offset + mem::size_of::<u16>()]);
 
 	// check for malformed packet
 	if data_len > PACKET_SIZE as u16 {
-		return Err(format!("Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\""));
+		return Err(format!(
+			"Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\""
+		));
 	}
 
 	// data_length counts its own 2 bytes, so anything smaller would underflow the subtraction below
 	if data_len < mem::size_of::<u16>() as u16 {
-		return Err(format!("Data length of \"{data_len}\" is smaller than the minimum of \"{}\"", mem::size_of::<u16>()));
+		return Err(format!(
+			"Data length of \"{data_len}\" is smaller than the minimum of \"{}\"",
+			mem::size_of::<u16>()
+		));
 	}
 
 	packet.data_length = data_len;
@@ -57,7 +63,7 @@ pub fn decode_packet(packet_bytes: [u8; PACKET_SIZE]) -> Result<Packet, String> 
 
 	// add file data
 	let file_data_len = data_len - mem::size_of::<u16>() as u16;
-	packet.data = packet_bytes[offset..offset + file_data_len as usize].to_vec();
+	packet.data = packet_bytes[offset .. offset + file_data_len as usize].to_vec();
 
 	Ok(packet)
 }
@@ -76,14 +82,17 @@ pub fn encode_packet(data: Vec<u8>) -> [u8; PACKET_SIZE] {
 	// append data length
 	let data_length: u16 = (mem::size_of::<u16>() + data.len()) as u16;
 	if data_length > PACKET_SIZE as u16 {
-		eprintln!("Data length of \"{data_length}\" is larger than maximum packet size of \"{PACKET_SIZE}\"");
+		eprintln!(
+			"Data length of \"{data_length}\" is larger than maximum packet size of \
+			 \"{PACKET_SIZE}\""
+		);
 	}
 	let data_length_bytes: [u8; 2] = data_length.to_be_bytes();
-	packet[offset..offset + mem::size_of::<u16>()].copy_from_slice(&data_length_bytes);
+	packet[offset .. offset + mem::size_of::<u16>()].copy_from_slice(&data_length_bytes);
 	offset += mem::size_of::<u16>();
 
 	// append data
-	packet[offset..offset + data.len()].copy_from_slice(&data);
+	packet[offset .. offset + data.len()].copy_from_slice(&data);
 
 	packet
 }
@@ -113,7 +122,7 @@ mod tests {
 	fn test_decode_packet() {
 		let expected = Packet {
 			data_length: 13,
-			data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
+			data:        vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
 		};
 
 		let data = vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
@@ -130,11 +139,13 @@ mod tests {
 		let data_len: u16 = PACKET_SIZE as u16 + 1; // data_len is larger than PACKET_SIZE
 		let mut packet_bytes: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
 
-		BigEndian::write_u16(&mut packet_bytes[0..2], data_len);
+		BigEndian::write_u16(&mut packet_bytes[0 .. 2], data_len);
 
 		let result = packet::decode_packet(packet_bytes);
 
-		let expected_error = format!("Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\"");
+		let expected_error = format!(
+			"Data length of \"{data_len}\" is larger than maximum packet size of \"{PACKET_SIZE}\""
+		);
 
 		assert_eq!(result, Err(expected_error));
 	}
@@ -145,11 +156,12 @@ mod tests {
 		for data_len in [0u16, 1] {
 			let mut packet_bytes: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
 
-			BigEndian::write_u16(&mut packet_bytes[0..2], data_len);
+			BigEndian::write_u16(&mut packet_bytes[0 .. 2], data_len);
 
 			let result = packet::decode_packet(packet_bytes);
 
-			let expected_error = format!("Data length of \"{data_len}\" is smaller than the minimum of \"2\"");
+			let expected_error =
+				format!("Data length of \"{data_len}\" is smaller than the minimum of \"2\"");
 
 			assert_eq!(result, Err(expected_error));
 		}
@@ -160,7 +172,7 @@ mod tests {
 	fn test_unequal_packets() {
 		let expected = Packet {
 			data_length: 87,
-			data: vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
+			data:        vec![1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1],
 		};
 
 		let data = vec![10, 9, 8, 7, 6, 5, 4, 3, 2, 1];

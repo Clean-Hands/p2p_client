@@ -3,8 +3,10 @@
 //! June 4th, 2025
 //! CS347 Advanced Software Design
 
-use std::fs::{self, File};
-use std::path::PathBuf;
+use std::{
+	fs::{self, File},
+	path::PathBuf,
+};
 
 
 
@@ -16,8 +18,8 @@ use std::path::PathBuf;
 ///
 /// ```rust
 /// let bytes = match read_file_bytes(&String::from("test.txt")) {
-///     Ok(b) => b,
-///     Err(e) => eprintln!("{e}")
+/// 	Ok(b) => b,
+/// 	Err(e) => eprintln!("{e}"),
 /// };
 /// ```
 pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
@@ -37,7 +39,7 @@ pub fn read_file_bytes(file_path: &PathBuf) -> Result<Vec<u8>, String> {
 ///
 /// ```rust
 /// if let Err(e) = write_file_bytes(&String::from("test.txt"), vec![104, 101, 108, 108, 111]) {
-///     eprintln!("{e}")
+/// 	eprintln!("{e}")
 /// }
 /// ```
 #[allow(dead_code)]
@@ -59,17 +61,17 @@ pub fn write_file_bytes(file_path: &PathBuf, bytes: &Vec<u8>) -> Result<(), Stri
 ///
 /// ```rust
 /// let mut file = match open_writable_file(&String::from("test.txt")) {
-///     Ok(f) => f,
-///     Err(e) => {
-///         eprintln!("Failed to open file: {e}");
-///         return;
-///     }
+/// 	Ok(f) => f,
+/// 	Err(e) => {
+/// 		eprintln!("Failed to open file: {e}");
+/// 		return;
+/// 	},
 /// };
 ///
 /// for byte in bytes {
-///     if let Err(e) = file.write(&[byte]) {
-///         eprintln!("Failed to write byte to file: {e}");
-///     }
+/// 	if let Err(e) = file.write(&[byte]) {
+/// 		eprintln!("Failed to write byte to file: {e}");
+/// 	}
 /// }
 /// ```
 pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
@@ -84,7 +86,6 @@ pub fn open_writable_file(file_path: &PathBuf) -> Result<File, String> {
 /// Returns the size of a given file in bytes by reading the file's metadata
 ///
 /// *does not read entire file into memory*
-///
 pub fn get_file_size(file_path: &PathBuf) -> Result<u64, String> {
 	let file = match File::open(file_path) {
 		Ok(f) => f,
@@ -135,8 +136,10 @@ mod tests {
 			Ok(f) => f,
 			Err(e) => panic!("{e}"),
 		};
-		file.write_all(&to_write1).expect("Failed to write to file");
-		file.write_all(&to_write2).expect("Failed to write to file");
+		file.write_all(&to_write1)
+			.expect("Failed to write to file");
+		file.write_all(&to_write2)
+			.expect("Failed to write to file");
 
 		let actual_data = match read_file_bytes(&test_file_name) {
 			Ok(b) => b,

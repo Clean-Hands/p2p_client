@@ -3,10 +3,11 @@
 //! June 4th, 2025
 //! CS347 Advanced Software Design
 
-use crate::packet;
+use std::{io::Write, net::TcpStream};
+
 use aes_gcm::{Aes256Gcm, Nonce, aead::Aead};
-use std::io::Write;
-use std::net::TcpStream;
+
+use crate::packet;
 
 // Aes256Gcm appends a 16 byte verification tag to the end of the ciphertext
 pub const AES256GCM_VER_TAG_SIZE: usize = 16;
@@ -59,11 +60,11 @@ pub fn decrypt_message(
 		Ok(plaintext) => {
 			// convert output of decrypt from vec to array so it plays nicely with decode function
 			let mut plaintext_as_array = [0; packet::PACKET_SIZE];
-			for i in 0..packet::PACKET_SIZE {
+			for i in 0 .. packet::PACKET_SIZE {
 				plaintext_as_array[i] = plaintext[i];
 			}
 			plaintext_as_array
-		}
+		},
 		Err(e) => return Err(format!("Decryption failed {}", e)),
 	};
 	increment_nonce(nonce);
